@@ -15,20 +15,13 @@ npm run build:web # dist/web/index.html, a single self-contained page
 
 `npm run build:local` makes `dist/local.html` with React inlined for offline testing.
 
-## Deploy to georgejacques.com/sailing (GoDaddy)
+## Deploy
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds and uploads `dist/web/` to
-`public_html/sailing/` over FTPS. Add three repository secrets under Settings > Secrets and variables > Actions:
+Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes `dist/web/` to
+GitHub Pages at https://sailing.georgejacques.com.
 
-| Secret | Value |
-| --- | --- |
-| `FTP_SERVER` | Your GoDaddy FTP host, e.g. `ftp.georgejacques.com` |
-| `FTP_USERNAME` | An FTP account from cPanel > FTP Accounts |
-| `FTP_PASSWORD` | That account's password |
-
-If your FTP account is already rooted at `public_html`, change `server-dir` to `./sailing/`.
-
-Manual alternative: upload `dist/web/index.html` to `public_html/sailing/` in cPanel File Manager.
+DNS (GoDaddy > Domains > georgejacques.com > DNS): a `CNAME` record with name `sailing` pointing to
+`veracia-admin.github.io`.
 
 ## Data
 
