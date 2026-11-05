@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,7 +22,11 @@ jobs:
       - run: npm run build:web
       # Uploads dist/web/ to the GoDaddy hosting folder over FTPS.
       # Set these repository secrets: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD.
+      - name: Skip upload until FTP secrets are set
+        if: env.FTP_SERVER == ''
+        run: echo "::notice::FTP secrets not set, so the site was built but not uploaded."
       - uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        if: env.FTP_SERVER != ''
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
