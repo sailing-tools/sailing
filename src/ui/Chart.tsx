@@ -282,12 +282,12 @@ export function Chart() {
           <g className="start-opt">
             {course.startPlan.routes.map((r, ri) => {
               const best = r === course.startPlan!.best;
-              if (!best && r.plan !== 'laylines') return null; // the lane variants would crowd the chart
+              // Leg 1 already draws the recommended route; the lane variants would crowd the chart.
+              if (best || r.plan !== 'laylines') return null;
               return (
-                <g key={'so' + ri} className={best ? 'so-best' : r.roundsOk ? '' : 'so-wrong'}>
-                  {r.parts.map((pt, j) => <g key={j}>{line(pt.start, pt.end, `track opt ${pt.sail.tack}${best ? ' best' : ''}`)}</g>)}
-                  {r.parts.length > 1 && (() => { const s2 = toS(r.parts[0].end); return <circle cx={s2.x} cy={s2.y} r={best ? 4 : 3} className={`tackdot ${r.parts[0].sail.tack}`} />; })()}
-                  {best && r.parts.length > 1 && r.tackBearing !== undefined && label(r.parts[0].end, `Best start: ${r.end}, ${r.first === 'starboard' ? 'stbd' : 'port'} ${fmtTime(r.parts[0].hours)}, tack at mark ${fmtDeg(r.tackBearing)}`, 'lbl opt-t best-t', 16)}
+                <g key={'so' + ri} className={r.roundsOk ? '' : 'so-wrong'}>
+                  {r.parts.map((pt, j) => <g key={j}>{line(pt.start, pt.end, `track opt ${pt.sail.tack}`)}</g>)}
+                  {r.parts.length > 1 && (() => { const s2 = toS(r.parts[0].end); return <circle cx={s2.x} cy={s2.y} r={3} className={`tackdot ${r.parts[0].sail.tack}`} />; })()}
                 </g>
               );
             })}

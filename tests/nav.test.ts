@@ -370,3 +370,18 @@ describe('start strategy risk', () => {
     expect(startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, { x: 0, y: 0 }, boat).upTideSide).toBe(null);
   });
 });
+
+describe('leg 1 follows the start strategy', () => {
+  it('sails the recommended start route, so only one route is drawn to the first mark', async () => {
+    const { computeCourse } = await import('../src/course');
+    const { initialState } = await import('../src/store');
+    for (const cond of [initialState.cond, { windFrom: 37, windKn: 11.6, windRef: 'ground' as const, tideTo: 95, tideKn: 0.6 }]) {
+      const c = computeCourse({ ...initialState, cond, upTwa: 44 });
+      const best = c.startPlan!.best!;
+      expect(c.legs[0].parts).toBe(best.parts);
+      expect(c.legs[0].altParts).toBeUndefined();
+      expect(c.legs[0].timeH).toBeCloseTo(best.timeH, 9);
+      expect(c.legs[0].rounding?.ok).toBe(best.roundsOk);
+    }
+  });
+});
