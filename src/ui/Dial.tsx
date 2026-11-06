@@ -80,3 +80,27 @@ export function Speed({ id, value, onChange, max, label, onStart, step = 0.1, nu
     </div>
   );
 }
+
+/** A range slider with − and + buttons that step it by `step`, for easier touch use. */
+export function Slider({ id, label, value, min, max, step, onChange, onStart, format, unit = '' }: {
+  id: string; label: string; value: number; min: number; max: number; step: number;
+  onChange: (v: number) => void; onStart?: () => void; format?: (v: number) => string; unit?: string;
+}) {
+  const dp = Math.max(0, (String(step).split('.')[1] ?? '').length);
+  const bump = (d: number) => {
+    onStart?.();
+    onChange(Number(Math.min(max, Math.max(min, value + d)).toFixed(dp)));
+  };
+  const text = format ? format(value) : `${value}${unit}`;
+  return (
+    <div className="speed speed-nudge">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="range" min={min} max={max} step={step} value={value} onPointerDown={onStart} onChange={(e) => onChange(Number(e.target.value))} />
+      <div className="nudge">
+        <button type="button" onClick={() => bump(-step)} disabled={value <= min + 1e-9} aria-label={`${label}: less`}>−</button>
+        <output htmlFor={id}>{text}</output>
+        <button type="button" onClick={() => bump(step)} disabled={value >= max - 1e-9} aria-label={`${label}: more`}>+</button>
+      </div>
+    </div>
+  );
+}
