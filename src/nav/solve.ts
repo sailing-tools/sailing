@@ -130,6 +130,83 @@ export function twoTack(p: Vec, m: Vec, gs: Vec, gp: Vec) {
 
 export type LegKind = 'beat' | 'run' | 'reach' | 'blocked';
 
+/**
+ * How to sail a beat or run.
+ * 'laylines': two boards, tacking on the layline.
+ * 'lane': stay inside two "inner laylines" set `margin` of the way in from each real layline,
+ * tacking each time you reach one, for at most `maxTacks` tacks in all. The last tack is on the real layline.
+ */
+export interface Strategy { mode: 'laylines' | 'lane'; margin: number; maxTacks: number }
+
+export const LAYLINE_STRATEGY: Strategy = { mode: 'laylines', margin: 0.25, maxTacks: 1 };
+
+/**
+ * Bearings of the mark that tell you when to tack, as seen from the boat.
+ * With tide the mark bears the other board's CoG at the moment you reach its layline, because from
+ * there the other board's ground track runs straight to the mark. Every point on an inner layline
+ * also sees the mark on one fixed bearing, so the lane gives a constant bearing to tack on too.
+ * `margin` 0 gives the real laylines. Fraction m in from the layline means the remaining time is split
+ * m on the board you are on and 1 - m on the other.
+ */
+export function tackBearings(gs: Vec, gp: Vec, margin = 0) {
+  const m = Math.min(0.49, Math.max(0, margin));
+  return {
+    /** On starboard, tack when the mark bears this. */
+    starboard: bearingOf(add(mul(gs, m), mul(gp, 1 - m))),
+    /** On port, tack when the mark bears this. */
+    port: bearingOf(add(mul(gs, 1 - m), mul(gp, m))),
+  };
+}
+
+export type Part = { sail: Sailing; hours: number; start: Vec; end: Vec };
+
+/**
+ * Zig-zag from P to M between the inner laylines. In time coordinates (a, b) with M - P = a*Gs + b*Gp,
+ * the real laylines are a = 0 and b = 0, and the inner laylines are a = m(a + b) and b = m(a + b).
+ * Starboard only reduces a and port only reduces b, so each board runs to the opposite inner layline.
+ * When the tack budget is spent, or the next board would be shorter than `minBoardH` (or leave less than
+ * two such boards to the mark), the boat carries on to the real layline and makes its final tack there.
+ */
+export function laneParts(
+  from: Vec, to: Vec, pair: TackPair, first: 'starboard' | 'port', margin: number, maxTacks: number, minBoardH = 0,
+): Part[] | null {
+  const sol = twoTack(from, to, pair.starboard.ground, pair.port.ground);
+  if (!sol || sol.a < -1e-9 || sol.b < -1e-9) return null;
+  const m = Math.min(0.45, Math.max(0, margin));
+  let a = Math.max(0, sol.a), b = Math.max(0, sol.b);
+  let cur = first;
+  let p = from;
+  const out: Part[] = [];
+  const sail = (side: 'starboard' | 'port', hours: number) => {
+    if (hours < 1e-9) return;
+    const s = side === 'starboard' ? pair.starboard : pair.port;
+    const end = add(p, mul(s.ground, hours));
+    out.push({ sail: s, hours, start: p, end });
+    p = end;
+    if (side === 'starboard') a -= hours; else b -= hours;
+  };
+  const budget = Math.max(1, Math.round(maxTacks));
+  let flipped = false;
+  // Each lane board ends in a tack; the final tack onto the real layline makes up the budget.
+  while (out.length < budget - 1 && m > 0) {
+    // Hours on this board until the opposite inner layline.
+    const t = cur === 'starboard' ? a - (m * b) / (1 - m) : b - (m * a) / (1 - m);
+    if (t <= 1e-9) {
+      if (out.length === 0 && !flipped) { flipped = true; cur = cur === 'starboard' ? 'port' : 'starboard'; continue; } // start outside the lane
+      break;
+    }
+    // Skip boards too short to be worth a tack, and leave room for a real final approach.
+    if (t < minBoardH || a + b - t < 2 * minBoardH) break;
+    sail(cur, t);
+    cur = cur === 'starboard' ? 'port' : 'starboard';
+  }
+  // Final approach: carry on to the real layline, tack, and lay the mark.
+  sail(cur, cur === 'starboard' ? a : b);
+  sail(cur === 'starboard' ? 'port' : 'starboard', cur === 'starboard' ? b : a);
+  if (out.length) out[out.length - 1].end = to; // remove rounding drift
+  return out;
+}
+
 export interface LegSolution {
   kind: LegKind;
   from: Vec;
@@ -138,16 +215,20 @@ export interface LegSolution {
   bearing: number;
   timeH: number;
   /** Boat states in the order sailed. */
-  parts: { sail: Sailing; hours: number; start: Vec; end: Vec }[];
+  parts: Part[];
   /** The same leg sailed with the other board first (beats and runs with two boards). */
-  altParts?: { sail: Sailing; hours: number; start: Vec; end: Vec }[];
+  altParts?: Part[];
   pair?: TackPair;
   laylines?: { starboard: Vec; port: Vec }; // unit directions FROM the mark, back along -ground
+  /** Mark bearing (true, from the boat) at which to tack onto the layline, for each board you might be on. */
+  tackBearings?: { starboard: number; port: number };
+  /** Lane strategy only: unit directions FROM the mark along the inner laylines, and their tack bearings. */
+  lane?: { starboard: Vec; port: Vec; bearings: { starboard: number; port: number }; margin: number };
   reach: ReachSolution;
   note?: string;
 }
 
-export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCfg): LegSolution {
+export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCfg, strategy: Strategy = LAYLINE_STRATEGY): LegSolution {
   const d = sub(to, from);
   const dist = len(d);
   const bearing = bearingOf(d);
@@ -167,13 +248,35 @@ export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCf
     const pair = tackPair(wind, tide, boat, mode);
     const sol = twoTack(from, to, pair.starboard.ground, pair.port.ground);
     const laylines = { starboard: norm(mul(pair.starboard.ground, -1)), port: norm(mul(pair.port.ground, -1)) };
+    const tb = tackBearings(pair.starboard.ground, pair.port.ground);
+    const useLane = strategy.mode === 'lane' && strategy.maxTacks > 1 && strategy.margin > 0;
+    let lane: LegSolution['lane'];
+    if (useLane) {
+      const bearings = tackBearings(pair.starboard.ground, pair.port.ground, strategy.margin);
+      // The starboard-side inner layline is where a port-tack boat tacks onto starboard, and vice versa.
+      lane = { starboard: fromBearing(bearings.port + 180), port: fromBearing(bearings.starboard + 180), bearings, margin: strategy.margin };
+    }
+    if (sol && sol.a >= -1e-9 && sol.b >= -1e-9 && useLane) {
+      // A lane board must be at least a minute, twice the tack cost and 5% of the leg.
+      const minBoard = Math.max(60 / 3600, (2 * boat.tackPenaltySec) / 3600, 0.05 * (sol.a + sol.b));
+      const firstSide = sol.a >= sol.b ? 'starboard' : 'port';
+      const otherSide = firstSide === 'starboard' ? 'port' : 'starboard';
+      const parts = laneParts(from, to, pair, firstSide, strategy.margin, strategy.maxTacks, minBoard) ?? [];
+      const alt = laneParts(from, to, pair, otherSide, strategy.margin, strategy.maxTacks, minBoard) ?? [];
+      const altParts = alt.length > 1 && (alt[0].sail.tack !== parts[0]?.sail.tack) ? alt : undefined;
+      const turns = Math.max(0, parts.length - 1);
+      return {
+        ...base, kind: mode === 'up' ? 'beat' : 'run', pair, laylines, tackBearings: tb, lane, parts, altParts,
+        timeH: sol.a + sol.b + (turns * boat.tackPenaltySec) / 3600,
+      };
+    }
     if (sol && sol.a >= -1e-9 && sol.b >= -1e-9) {
       const legs = [
         { sail: pair.starboard, hours: Math.max(0, sol.a) },
         { sail: pair.port, hours: Math.max(0, sol.b) },
       ].sort((x, y) => y.hours - x.hours); // longer board first
       const build = (order: typeof legs) => {
-        const out: LegSolution['parts'] = [];
+        const out: Part[] = [];
         let p = from;
         for (const l of order) {
           if (l.hours < 1e-6) continue;
@@ -187,17 +290,17 @@ export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCf
       const altParts = parts.length > 1 ? build([...legs].reverse()) : undefined;
       const turns = Math.max(0, parts.length - 1);
       return {
-        ...base, kind: mode === 'up' ? 'beat' : 'run', pair, laylines, parts, altParts,
+        ...base, kind: mode === 'up' ? 'beat' : 'run', pair, laylines, tackBearings: tb, parts, altParts,
         timeH: sol.a + sol.b + (turns * boat.tackPenaltySec) / 3600,
       };
     }
     if (!reach.feasible) {
-      return { ...base, kind: 'blocked', pair, laylines, parts: [], timeH: Infinity, note: reach.reason };
+      return { ...base, kind: 'blocked', pair, laylines, tackBearings: tb, parts: [], timeH: Infinity, note: reach.reason };
     }
     // One tack lays the mark: sail it as a tight reach.
     return {
       ...base, kind: 'reach', parts: [{ sail: reach, hours: reach.timeH, start: from, end: to }],
-      timeH: reach.timeH, pair, laylines, note: 'Laid on one tack',
+      timeH: reach.timeH, pair, laylines, tackBearings: tb, note: 'Laid on one tack',
     };
   }
   return {

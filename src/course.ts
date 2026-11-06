@@ -33,7 +33,7 @@ export interface CourseModel {
   probeLeg: LegSolution | null;
 }
 
-export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
+export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'strategy' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
   const wind = resolveWind(s.cond);
   const boat: BoatCfg = { polar: s.customPolar ?? JEANNEAU_410, leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec };
   const points: CoursePoint[] = [];
@@ -41,7 +41,7 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
   for (const m of s.marks) points.push({ pos: m.pos, label: m.name, markId: m.id });
   if (s.startLine && s.finishAtStart && s.marks.length) points.push({ pos: mid(s.startLine.committee, s.startLine.pin), label: 'Finish' });
   const legs: LegSolution[] = [];
-  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat));
+  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy));
   const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let start: CourseModel['start'] = null;
   if (s.startLine) {
@@ -54,7 +54,7 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
   let probeLeg: LegSolution | null = null;
   if (s.probe && points.length > 1) {
     const target = points[Math.min(s.selectedLeg + 1, points.length - 1)];
-    probeLeg = solveLeg(s.probe, target.pos, wind.water, wind.tide, boat);
+    probeLeg = solveLeg(s.probe, target.pos, wind.water, wind.tide, boat, s.strategy);
   }
   return { wind, boat, points, legs, totalH, start, probeLeg };
 }
@@ -63,6 +63,7 @@ export function useCourse(): CourseModel {
   const cond = useApp((s) => s.cond);
   const leewayDeg = useApp((s) => s.leewayDeg);
   const tackPenaltySec = useApp((s) => s.tackPenaltySec);
+  const strategy = useApp((s) => s.strategy);
   const customPolar = useApp((s) => s.customPolar);
   const startLine = useApp((s) => s.startLine);
   const marks = useApp((s) => s.marks);
@@ -70,8 +71,8 @@ export function useCourse(): CourseModel {
   const probe = useApp((s) => s.probe);
   const selectedLeg = useApp((s) => s.selectedLeg);
   return React.useMemo(
-    () => computeCourse({ cond, leewayDeg, tackPenaltySec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
-    [cond, leewayDeg, tackPenaltySec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
+    () => computeCourse({ cond, leewayDeg, tackPenaltySec, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
+    [cond, leewayDeg, tackPenaltySec, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
   );
 }
 

@@ -3,8 +3,8 @@ import { useApp, setState, checkpoint, getState } from '../store';
 import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel } from '../course';
 import { Dial, Speed } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
-import { Vec, len, add, mul, bearingOf } from '../nav/vec';
-import { Sailing } from '../nav/solve';
+import { Vec, len, add, mul, sub, bearingOf, norm180 } from '../nav/vec';
+import { Sailing, LegSolution } from '../nav/solve';
 
 const twaTxt = (t: number) => `${Math.round(Math.abs(t))}° ${t >= 0 ? 'stbd' : 'port'}`;
 
@@ -102,7 +102,7 @@ function StartOptions({ st, markName }: { st: NonNullable<CourseModel['start']>;
   return (
     <div className="tablewrap">
       <table className="opts" aria-label={`Start options to ${markName}`}>
-        <thead><tr><th>From</th><th>First board</th><th>CoG</th><th>{word} at</th><th>Then CoG</th><th>To {markName}</th></tr></thead>
+        <thead><tr><th>From</th><th>First board</th><th>CoG</th><th>{word} at</th><th>{word} when mark bears</th><th>To {markName}</th></tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className={Math.abs(r.total - best) < 1 / 3600 ? 'best' : ''}>
@@ -142,9 +142,9 @@ export function LegsPanel() {
                   <td>{l.dist.toFixed(2)}</td>
                   <td>{fmtDeg(l.bearing)}</td>
                   <td>{first ? twaTxt(first.twa) : '—'}</td>
-                  <td>{l.parts.map((p) => fmtDeg(p.sail.heading)).join(' / ') || '—'}</td>
-                  <td>{l.parts.map((p) => fmtDeg(p.sail.cog)).join(' / ') || '—'}</td>
-                  <td>{l.parts.map((p) => p.sail.sog.toFixed(1)).join(' / ') || '—'}</td>
+                  <td>{uniq(l.parts.map((p) => fmtDeg(p.sail.heading))) || '—'}</td>
+                  <td>{uniq(l.parts.map((p) => fmtDeg(p.sail.cog))) || '—'}</td>
+                  <td>{uniq(l.parts.map((p) => p.sail.sog.toFixed(1))) || '—'}</td>
                   <td>{fmtTime(l.timeH)}</td>
                 </tr>
               );
@@ -157,6 +157,100 @@ export function LegsPanel() {
   );
 }
 
+const uniq = (xs: string[]) => [...new Set(xs)].join(' / ');
+
+/** Relative bearing of the mark off the bow, e.g. "72° stbd". */
+const offBow = (markBrg: number, heading: number) => {
+  const r = norm180(markBrg - heading);
+  return `${Math.round(Math.abs(r))}° ${r >= 0 ? 'stbd' : 'port'}`;
+};
+const side = (t: string) => (t === 'starboard' ? 'Stbd' : 'Port');
+
+export function TackingPanel() {
+  const c = useCourse();
+  const strategy = useApp((s) => s.strategy);
+  const selected = useApp((s) => s.selectedLeg);
+  const set = (p: Partial<typeof strategy>) => setState((s) => ({ strategy: { ...s.strategy, ...p } }));
+  const leg: LegSolution | undefined = c.legs[selected];
+  const twoBoard = leg && (leg.kind === 'beat' || leg.kind === 'run');
+  const word = leg?.kind === 'run' ? 'gybe' : 'tack';
+  const Word = word === 'gybe' ? 'Gybe' : 'Tack';
+  const lane = strategy.mode === 'lane';
+  return (
+    <section className="panel" aria-labelledby="h-tack">
+      <h2 id="h-tack">Tacking <span className="muted">{leg ? `Leg ${selected + 1}` : ''}</span></h2>
+      <div className="seg seg-full" role="radiogroup" aria-label="Upwind and downwind strategy">
+        {([['laylines', 'Tack on the laylines'], ['lane', 'Stay off the laylines']] as const).map(([m, t]) => (
+          <button key={m} type="button" role="radio" aria-checked={strategy.mode === m} className={strategy.mode === m ? 'on' : ''} onClick={() => { checkpoint(); set({ mode: m }); }}>{t}</button>
+        ))}
+      </div>
+      {lane && (
+        <>
+          <div className="speed">
+            <label htmlFor="lane-margin">Keep off by</label>
+            <input id="lane-margin" type="range" min={0.1} max={0.45} step={0.05} value={strategy.margin} onPointerDown={checkpoint} onChange={(e) => set({ margin: Number(e.target.value) })} />
+            <output htmlFor="lane-margin">{Math.round(strategy.margin * 100)}%</output>
+          </div>
+          <div className="speed">
+            <label htmlFor="lane-tacks">Most tacks</label>
+            <input id="lane-tacks" type="range" min={2} max={12} step={1} value={strategy.maxTacks} onPointerDown={checkpoint} onChange={(e) => set({ maxTacks: Number(e.target.value) })} />
+            <output htmlFor="lane-tacks">{strategy.maxTacks}</output>
+          </div>
+          <p className="small muted">
+            Two inner laylines sit this far in from the real ones, as a share of the gap between them. You {word} each time you reach one,
+            then make the last {word} on the real layline. A wider margin keeps you nearer the middle and needs more {word}s.
+            Boards shorter than a minute, twice the {word} cost or 5% of the leg are left out, so you may use fewer {word}s than the most allowed.
+          </p>
+        </>
+      )}
+      {twoBoard && leg.tackBearings ? (
+        <>
+          <div className="bearings">
+            {lane && leg.lane && <div className="kv"><span>This leg</span><b>{leg.parts.length - 1} {word}s of {strategy.maxTacks} allowed, {fmtTime(leg.timeH)}</b></div>}
+            {lane && leg.lane && (
+              <>
+                <div className="kv"><span>Inner laylines: on stbd, {word} when the mark bears</span><b className="stbd-c">{fmtDeg(leg.lane.bearings.starboard)}T</b></div>
+                <div className="kv"><span>on port, {word} when it bears</span><b className="port-c">{fmtDeg(leg.lane.bearings.port)}T</b></div>
+              </>
+            )}
+            <div className="kv"><span>{lane ? 'Final ' + word + ' on the layline: on stbd' : `On stbd, ${word}`} when the mark bears</span><b className="stbd-c">{fmtDeg(leg.tackBearings.starboard)}T</b></div>
+            <div className="kv"><span>{lane ? 'on port' : `On port, ${word}`} when it bears</span><b className="port-c">{fmtDeg(leg.tackBearings.port)}T</b></div>
+          </div>
+          {leg.parts.length > 0 && (
+            <div className="tablewrap">
+              <table className="opts boards" aria-label={`Boards on leg ${selected + 1}`}>
+                <thead><tr><th>#</th><th>Board</th><th>CoG</th><th>Time</th><th>{Word} when mark bears</th><th>Off the bow</th></tr></thead>
+                <tbody>
+                  {leg.parts.map((p, j) => {
+                    const last = j === leg.parts.length - 1;
+                    const brg = bearingOf(sub(leg.to, p.end));
+                    return (
+                      <tr key={j}>
+                        <td>{j + 1}</td>
+                        <td className={p.sail.tack === 'starboard' ? 'stbd-c' : 'port-c'}>{side(p.sail.tack)}</td>
+                        <td>{fmtDeg(p.sail.cog)}</td>
+                        <td>{fmtTime(p.hours)}</td>
+                        <td>{last ? 'mark' : `${fmtDeg(brg)}T`}</td>
+                        <td>{last ? '—' : offBow(brg, p.sail.heading)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="small muted">
+            With tide, the mark bears the next board's course over the ground when you reach the layline, not the next heading.
+            Take a hand-bearing on the mark and {word} when it reads the bearing above. Bearings are true; variation in the Solent is under 1°.
+          </p>
+        </>
+      ) : (
+        <p className="muted">{leg ? `Leg ${selected + 1} is a ${leg.kind === 'reach' ? 'reach, laid on one board' : 'blocked leg'}. Pick a beat or a run to see tack bearings.` : 'Add marks to see tack bearings.'}</p>
+      )}
+    </section>
+  );
+}
+
 function SelectedLegNote({ c, i }: { c: CourseModel; i: number }) {
   const l = c.legs[i];
   if (!l) return null;
@@ -164,6 +258,13 @@ function SelectedLegNote({ c, i }: { c: CourseModel; i: number }) {
   if (l.kind === 'beat' || l.kind === 'run') {
     const [a, b] = l.parts;
     const word = l.kind === 'beat' ? 'tack' : 'gybe';
+    if (l.parts.length > 2) {
+      return (
+        <p className="note">
+          Leg {i + 1}: {l.parts.length - 1} {word}s, starting on {a.sail.tack}, staying off the laylines until the last {word}. See Tacking for each board.
+        </p>
+      );
+    }
     return (
       <p className="note">
         Leg {i + 1}: sail {a.sail.tack} for {fmtTime(a.hours)}{b ? `, ${word} onto ${b.sail.tack} for ${fmtTime(b.hours)}` : ''}.

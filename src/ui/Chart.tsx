@@ -161,8 +161,17 @@ export function Chart() {
     );
   };
 
+  // Tack labels on a multi-tack leg are dropped where they would crowd the mark or each other.
+  const tackLabelAt: Vec[] = [];
+  const roomFor = (p: Vec, markS: Vec) => {
+    if (len(sub(p, markS)) < 45 || tackLabelAt.some((q) => len(sub(p, q)) < 40)) return false;
+    tackLabelAt.push(p);
+    return true;
+  };
+
   const legLayer = (leg: LegSolution, i: number) => {
     const sel = i === selectedLeg;
+    if (sel) tackLabelAt.length = 0;
     const A = toS(leg.from), B = toS(leg.to);
     const m = mid(A, B);
     const showLay = layers.laylines && leg.laylines && (sel || layers.allLaylines) && (leg.kind === 'beat' || leg.kind === 'run' || leg.kind === 'blocked');
@@ -178,19 +187,31 @@ export function Chart() {
           </g>
         )}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="rhumb" />
-        {leg.parts.map((pt, j) => (
-          <g key={j}>
-            {line(pt.start, pt.end, `track ${pt.sail.tack}`, { markerMid: undefined })}
-            {sel && label(mid(pt.start, pt.end), `${leg.kind === 'reach' ? 'CoG' : pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} ${fmtDeg(pt.sail.cog)} · ${fmtTime(pt.hours)}`, 'lbl track-t', 10)}
+        {sel && leg.lane && (leg.kind === 'beat' || leg.kind === 'run') && (
+          <g>
+            {line(leg.to, add(leg.to, mul(leg.lane.starboard, layLen)), 'layline inner stbd')}
+            {line(leg.to, add(leg.to, mul(leg.lane.port, layLen)), 'layline inner port')}
           </g>
-        ))}
+        )}
+        {leg.parts.map((pt, j) => {
+          const many = leg.parts.length > 2;
+          const isTack = j < leg.parts.length - 1 && leg.kind !== 'reach';
+          const tp = toS(pt.end);
+          return (
+            <g key={j}>
+              {line(pt.start, pt.end, `track ${pt.sail.tack}`, { markerMid: undefined })}
+              {sel && (!many || pt.hours * k * len(pt.sail.ground) > 90) && label(mid(pt.start, pt.end), `${leg.kind === 'reach' ? 'CoG' : pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} ${fmtDeg(pt.sail.cog)} · ${fmtTime(pt.hours)}`, 'lbl track-t', 10)}
+              {sel && isTack && <circle cx={tp.x} cy={tp.y} r={3.5} className={`tackdot ${pt.sail.tack}`} />}
+              {sel && isTack && (many ? roomFor(tp, toS(leg.to)) : !(i === 0 && layers.startOptions && course.start)) && label(pt.end, many ? `${leg.kind === 'beat' ? 'Tack' : 'Gybe'} ${j + 1} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}` : `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}`, 'lbl tackpt-t', -8)}
+            </g>
+          );
+        })}
         {layers.bothRoutes && leg.altParts && (sel || layers.allLaylines) && leg.altParts.map((pt, j) => (
           <g key={'alt' + j}>
             {line(pt.start, pt.end, `track alt ${pt.sail.tack}`)}
-            {sel && j === 0 && !(i === 0 && layers.startOptions && course.start) && label(pt.end, `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)}`, 'lbl tackpt-t', -8)}
+            {sel && j === 0 && leg.parts.length <= 2 && !(i === 0 && layers.startOptions && course.start) && label(pt.end, `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}`, 'lbl tackpt-t', -8)}
           </g>
         ))}
-        {sel && leg.parts.length > 1 && !(i === 0 && layers.startOptions && course.start) && label(leg.parts[0].end, `${leg.parts[0].sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(leg.parts[0].hours)}`, 'lbl tackpt-t', -8)}
         {layers.triangles && leg.parts[0] && triangle(leg.from, leg.parts[0].sail, course.wind.tide, 'tri' + i, !sel)}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="hit" data-leg={i} />
         <g transform={`translate(${m.x},${m.y})`} data-leg={i} className="legno">
@@ -227,7 +248,7 @@ export function Chart() {
                 <g key={r + ':' + j}>
                   {line(pt.start, pt.end, `track opt ${pt.sail.tack}`)}
                   {j === 0 && parts.length > 1 && (() => { const s2 = toS(pt.end); return <circle cx={s2.x} cy={s2.y} r={3} className={`tackdot ${pt.sail.tack}`} />; })()}
-                  {j === 0 && parts.length > 1 && label(pt.end, `${end === 'pin' ? 'Pin' : 'Cttee'}: ${pt.sail.tack === 'starboard' ? 'stbd' : 'port'} ${fmtTime(pt.hours)}, tack`, 'lbl opt-t', end === 'pin' ? 26 : 14)}
+                  {j === 0 && parts.length > 1 && label(pt.end, `${end === 'pin' ? 'Pin' : 'Cttee'}: ${pt.sail.tack === 'starboard' ? 'stbd' : 'port'} ${fmtTime(pt.hours)}, tack at mark ${fmtDeg(bearingOf(sub(l.to, pt.end)))}`, 'lbl opt-t', end === 'pin' ? 26 : 14)}
                 </g>
               )))}
             </g>

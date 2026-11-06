@@ -101,6 +101,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .layline { stroke-width: 1.3; stroke-dasharray: 8 5; }
 .layline.stbd { stroke: var(--stbd); }
 .layline.port { stroke: var(--port); }
+.layline.inner { stroke-width: 1.1; stroke-dasharray: 2 4; opacity: 0.85; }
+.seg-full { display: flex; width: 100%; margin-bottom: 10px; }
+.seg-full button { flex: 1 1 0; padding: 7px 8px; font-size: 13px; }
+.bearings { display: grid; gap: 4px; margin: 10px 0; }
+.bearings .stbd-c { color: var(--stbd); }
+.bearings .port-c { color: var(--port); }
+.boards td:first-child { color: var(--muted); }
 .legno circle { fill: var(--panel); stroke: var(--muted); }
 .legno text { fill: var(--ink); font: 600 11px var(--f-data); text-anchor: middle; }
 .leg.sel .legno circle { fill: var(--accent); stroke: var(--accent); }
