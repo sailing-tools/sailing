@@ -394,7 +394,7 @@ function LegNoteBody({ c, i }: { c: CourseModel; i: number }) {
       <p className="note">
         Leg {i + 1}: sail {a.sail.tack} for {fmtTime(a.hours)}{b ? `, ${word} onto ${b.sail.tack} for ${fmtTime(b.hours)}` : ''}.
         {b && l.altParts ? ` Or ${b.sail.tack} first for ${fmtTime(b.hours)}, then ${a.sail.tack} for ${fmtTime(a.hours)}.` : ''}
-        {b && !l.altParts && l.rounding ? ` Finishing on ${b.sail.tack} leaves ${c.points[i + 1].label} to ${l.rounding.side}.` : ''}
+        {b && !l.altParts && l.rounding?.ok ? ` Finishing on ${b.sail.tack} leaves ${c.points[i + 1].label} to ${l.rounding.side}.` : ''}
         {' '}Optimum {l.kind === 'beat' ? 'upwind' : 'downwind'} TWA {l.pair?.twa.toFixed(0)}° in {c.wind.water.kn.toFixed(1)} kn on the water.
       </p>
     );

@@ -67,6 +67,12 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
   }
   const legs: LegSolution[] = [];
   for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
+  // Leg 1 sails the recommended start route, so the chart, the legs table and the tacking table agree with Start strategy.
+  const best = startPlan?.best;
+  if (best && legs[0] && (legs[0].kind === 'beat' || legs[0].kind === 'run') && points[1]?.markId === s.marks[0]?.id) {
+    const l0 = legs[0];
+    legs[0] = { ...l0, parts: best.parts, altParts: undefined, timeH: best.timeH, rounding: l0.rounding ? { ...l0.rounding, ok: best.roundsOk } : undefined };
+  }
   const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let probeLeg: LegSolution | null = null;
   if (s.probe && points.length > 1) {
