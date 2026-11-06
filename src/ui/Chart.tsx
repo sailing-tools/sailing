@@ -194,8 +194,8 @@ export function Chart() {
           <g>
             {line(leg.to, add(leg.to, mul(leg.laylines!.starboard, layLen)), 'layline stbd')}
             {line(leg.to, add(leg.to, mul(leg.laylines!.port, layLen)), 'layline port')}
-            {sel && label(add(leg.to, mul(leg.laylines!.starboard, layLen)), `Stbd layline ${fmtDeg(bearingOf(mul(leg.laylines!.starboard, -1)))}`, 'lbl stbd-t')}
-            {sel && label(add(leg.to, mul(leg.laylines!.port, layLen)), `Port layline ${fmtDeg(bearingOf(mul(leg.laylines!.port, -1)))}`, 'lbl port-t')}
+            {sel && label(add(leg.to, mul(leg.laylines!.starboard, Math.min(layLen, 170 / k))), `Starboard layline (CoG ${fmtDeg(bearingOf(mul(leg.laylines!.starboard, -1)))})`, 'lbl stbd-t layline-t')}
+            {sel && label(add(leg.to, mul(leg.laylines!.port, Math.min(layLen, 230 / k))), `Port layline (CoG ${fmtDeg(bearingOf(mul(leg.laylines!.port, -1)))})`, 'lbl port-t layline-t')}
           </g>
         )}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="rhumb" />
@@ -203,6 +203,8 @@ export function Chart() {
           <g>
             {line(leg.to, add(leg.to, mul(leg.lane.starboard, layLen)), 'layline inner stbd')}
             {line(leg.to, add(leg.to, mul(leg.lane.port, layLen)), 'layline inner port')}
+            {label(add(leg.to, mul(leg.lane.starboard, Math.min(layLen, 300 / k))), `${Math.round(leg.lane.margin * 100)}% in from stbd layline`, 'lbl stbd-t layline-t inner-t')}
+            {label(add(leg.to, mul(leg.lane.port, Math.min(layLen, 300 / k))), `${Math.round(leg.lane.margin * 100)}% in from port layline`, 'lbl port-t layline-t inner-t')}
           </g>
         )}
         {leg.parts.map((pt, j) => {

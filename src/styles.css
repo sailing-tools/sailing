@@ -110,6 +110,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .layline { stroke-width: 1.3; stroke-dasharray: 8 5; }
 .layline.stbd { stroke: var(--stbd); }
 .layline.port { stroke: var(--port); }
+.layline-t { font-size: 10.5px; paint-order: stroke; stroke: var(--sea); stroke-width: 3px; }
+.inner-t { font-weight: 400; opacity: 0.9; }
 .layline.inner { stroke-width: 1.1; stroke-dasharray: 2 4; opacity: 0.85; }
 .twa-set { margin-bottom: 12px; }
 .twa-set p { margin: 4px 0 0; }

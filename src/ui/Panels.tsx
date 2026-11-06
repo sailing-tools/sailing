@@ -268,6 +268,18 @@ export function TackingPanel() {
       {twoBoard && leg.tackBearings ? (
         <>
           <div className="bearings">
+            {lane && leg.lane?.startOff && Math.min(leg.lane.startOff.starboard, leg.lane.startOff.port) < leg.lane.margin - 0.005 && (() => {
+              const off = leg.lane!.startOff!;
+              const near = off.starboard < off.port ? 'starboard' : 'port';
+              const pct = Math.round(Math.min(off.starboard, off.port) * 100);
+              return (
+                <p className="note warn">
+                  Leg {selected + 1} starts only {pct}% in from the {near} layline, inside your {Math.round(strategy.margin * 100)}% margin.
+                  You can't sail further from a layline once you've started, only along it ({near === 'starboard' ? 'on starboard' : 'on port'}) until it closes in.
+                  So the first board runs close to the {near} layline. To keep the margin, start further from it.
+                </p>
+              );
+            })()}
             {lane && leg.lane && <div className="kv"><span>This leg</span><b>{leg.parts.length - 1} {word}s of {strategy.maxTacks} allowed, {fmtTime(leg.timeH)}</b></div>}
             <p className="small muted bearings-h">{Word} when the mark bears (true · off the bow)</p>
             {lane && leg.lane && (

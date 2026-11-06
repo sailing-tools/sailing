@@ -49,9 +49,6 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
     if (!p?.rounding || !next) return undefined;
     return { side: p.rounding, nextBearing: bearingOf(sub(next.pos, p.pos)) };
   };
-  const legs: LegSolution[] = [];
-  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
-  const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let start: CourseModel['start'] = null;
   let startPlan: StartStrategy | null = null;
   if (s.startLine) {
@@ -62,7 +59,13 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
     const committeeLeg = first ? solveLeg(s.startLine.committee, first.pos, wind.water, wind.tide, boat, undefined, r1) : null;
     start = { ...info, pinH: pinLeg?.timeH ?? NaN, committeeH: committeeLeg?.timeH ?? NaN, pinLeg, committeeLeg };
     if (first) startPlan = startStrategy(s.startLine.committee, s.startLine.pin, first.pos, wind.water, wind.tide, boat, r1);
+    // Leg 1 starts from the recommended end of the line, not the middle.
+    const end = startPlan?.best?.end;
+    if (end && points[0]?.label === 'Start') points[0] = { pos: s.startLine[end], label: end === 'pin' ? 'Start (pin)' : 'Start (committee)' };
   }
+  const legs: LegSolution[] = [];
+  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
+  const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let probeLeg: LegSolution | null = null;
   if (s.probe && points.length > 1) {
     const ti = Math.min(s.selectedLeg + 1, points.length - 1);
