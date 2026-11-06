@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useApp, setState, checkpoint, getState, courseLink } from '../store';
-import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel } from '../course';
+import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative } from '../course';
 import { Dial, Speed } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
 import { Vec, len, add, mul, sub, bearingOf, norm180 } from '../nav/vec';
@@ -162,7 +162,7 @@ export function LegsPanel() {
             {c.legs.map((l, i) => {
               const first = l.parts[0]?.sail;
               return (
-                <tr key={i} className={i === selected ? 'sel' : ''} onClick={() => setState({ selectedLeg: i })} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setState({ selectedLeg: i })}>
+                <tr key={i} className={i === selected ? 'sel' : ''} onClick={() => setState({ selectedLeg: i, selectedTack: null })} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setState({ selectedLeg: i, selectedTack: null })}>
                   <td>{i + 1}<span className="to"> → {c.points[i + 1].label}</span></td>
                   <td><span className={`pill k-${l.kind}`}>{kindLabel[l.kind]}</span></td>
                   <td>{l.dist.toFixed(2)}</td>
@@ -198,6 +198,9 @@ export function TackingPanel() {
   const c = useCourse();
   const strategy = useApp((s) => s.strategy);
   const selected = useApp((s) => s.selectedLeg);
+  const selTack = useApp((s) => s.selectedTack);
+  const tackIdx = selTack && selTack.leg === selected ? selTack.idx : null;
+  const pick = (j: number) => setState({ selectedTack: tackIdx === j ? null : { leg: selected, idx: j } });
   const set = (p: Partial<typeof strategy>) => setState((s) => ({ strategy: { ...s.strategy, ...p } }));
   const leg: LegSolution | undefined = c.legs[selected];
   const twoBoard = leg && (leg.kind === 'beat' || leg.kind === 'run');
@@ -248,14 +251,14 @@ export function TackingPanel() {
           </div>
           {leg.parts.length > 0 && (
             <div className="tablewrap">
-              <table className="opts boards" aria-label={`Boards on leg ${selected + 1}`}>
+              <table className="opts boards pickable" aria-label={`Boards on leg ${selected + 1}`}>
                 <thead><tr><th>#</th><th>Board</th><th>CTW</th><th>CoG</th><th>Time</th><th>{Word} at: off bow</th><th>True</th></tr></thead>
                 <tbody>
                   {leg.parts.map((p, j) => {
                     const last = j === leg.parts.length - 1;
                     const brg = bearingOf(sub(leg.to, p.end));
                     return (
-                      <tr key={j}>
+                      <tr key={j} className={tackIdx === j ? 'sel' : ''} onClick={() => pick(j)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && pick(j)} aria-selected={tackIdx === j}>
                         <td>{j + 1}</td>
                         <td className={p.sail.tack === 'starboard' ? 'stbd-c' : 'port-c'}>{side(p.sail.tack)}</td>
                         <td>{fmtDeg(p.sail.heading)}</td>
@@ -269,6 +272,11 @@ export function TackingPanel() {
                 </tbody>
               </table>
             </div>
+          )}
+          {tackIdx !== null && leg.parts[tackIdx] ? (
+            <p className="note narrative">{tackNarrative(leg, tackIdx, c.points[selected + 1]?.label ?? 'the mark', c.points[selected + 1]?.rounding)}</p>
+          ) : (
+            <p className="small muted">Tap a board here or on the chart for step-by-step directions.</p>
           )}
           <p className="small muted">
             With tide, the mark bears the next board's course over the ground when you reach the layline, not the next heading.

@@ -22,6 +22,8 @@ export interface AppState {
   base: 'chart' | 'grid';
   tool: Tool;
   selectedLeg: number;
+  /** A board picked on the chart or in the tacking table: its leg and index in that leg's parts. */
+  selectedTack: { leg: number; idx: number } | null;
   probe: Vec | null;
   layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean };
   vectorMin: number;
@@ -46,6 +48,7 @@ export const initialState: AppState = {
   base: 'chart',
   tool: 'select',
   selectedLeg: 0,
+  selectedTack: null,
   probe: null,
   layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true },
   vectorMin: 6,

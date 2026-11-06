@@ -97,3 +97,27 @@ export const fmtTime = (h: number) => {
 };
 export const fmtTwa = (t: number) => `${Math.round(Math.abs(t))}° ${t >= 0 ? 'S' : 'P'}`;
 export const kindLabel: Record<string, string> = { beat: 'Beat', run: 'Run', reach: 'Reach', blocked: 'Blocked' };
+
+/** Relative bearing of a true bearing off the bow on a heading, e.g. "83° off the port bow". */
+export const offBowText = (brg: number, heading: number) => {
+  const r = ((brg - heading) % 360 + 540) % 360 - 180;
+  const a = Math.round(Math.abs(r));
+  if (a <= 2) return 'dead ahead';
+  return `${a}° off the ${r >= 0 ? 'starboard' : 'port'} bow`;
+};
+
+/** Plain-English description of board `j` of a leg and the tack at its end. */
+export function tackNarrative(leg: LegSolution, j: number, markLabel: string, rounding?: 'port' | 'starboard'): string {
+  const p = leg.parts[j];
+  if (!p) return '';
+  const word = leg.kind === 'run' ? 'gybe' : 'tack';
+  const n = leg.parts.length;
+  const board = `${p.sail.tack} ${leg.kind === 'run' ? 'gybe' : 'tack'}`;
+  const sail = `steer ${fmtDeg(p.sail.heading)} (CoG ${fmtDeg(p.sail.cog)}, ${p.sail.sog.toFixed(1)} kn) for ${fmtTime(p.hours)}`;
+  if (j === n - 1) {
+    return `Board ${j + 1} of ${n}, the last: ${board}, ${sail} to lay ${markLabel}${rounding ? `, leaving it to ${rounding}` : ''}.`;
+  }
+  const next = leg.parts[j + 1];
+  const brg = bearingOf(sub(leg.to, p.end));
+  return `Board ${j + 1} of ${n}: ${board}, ${sail}. ${word[0].toUpperCase() + word.slice(1)} when ${markLabel} is ${offBowText(brg, p.sail.heading)} (bearing ${fmtDeg(brg)}T). Then ${next.sail.tack}, steer ${fmtDeg(next.sail.heading)} for ${fmtTime(next.hours)}.`;
+}

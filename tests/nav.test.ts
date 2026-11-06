@@ -290,3 +290,16 @@ describe('course link', () => {
     expect(parseCourseHash('')).toBe(null);
   });
 });
+
+import { tackNarrative, offBowText } from '../src/course';
+describe('tack narrative', () => {
+  it('describes each board and the tack bearing off the bow', () => {
+    const leg = solveLeg({ x: 0, y: 0 }, { x: 0, y: 2 }, { from: 0, kn: 12 }, fromBearing(90, 1), boat);
+    const t = tackNarrative(leg, 0, 'Windward');
+    expect(t).toMatch(/^Board 1 of 2: /);
+    expect(t).toMatch(/off the (port|starboard) bow/);
+    expect(tackNarrative(leg, 1, 'Windward', 'port')).toMatch(/the last.*leaving it to port/);
+    expect(offBowText(10, 0)).toBe('10° off the starboard bow');
+    expect(offBowText(350, 0)).toBe('10° off the port bow');
+  });
+});

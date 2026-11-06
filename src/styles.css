@@ -178,6 +178,22 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
 .rose-text { text-align: center; line-height: 1.35; }
 .rose-text .tide-t { color: var(--tide); }
 
+.tack-hit { fill: transparent; cursor: pointer; }
+.board-hit { cursor: pointer; }
+.track.picked { stroke-width: 4 !important; opacity: 1 !important; }
+.tack-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.pickable tbody tr { cursor: pointer; }
+.pickable tbody tr:hover td { background: var(--paper); }
+.pickable tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.narrative { margin: 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--paper); border-radius: 4px; }
+.tackcard {
+  position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); width: min(460px, calc(100% - 32px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  font-size: 13px; display: flex; flex-direction: column; gap: 8px;
+}
+.tackcard p { margin: 0; line-height: 1.4; }
+.tackcard-nav { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font: 12px var(--f-data); }
+.tackcard-nav button { min-width: 36px; min-height: 32px; }
 .hint {
   position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
   background: var(--ink); color: var(--paper); padding: 7px 12px; border-radius: 6px; font-size: 13px;
