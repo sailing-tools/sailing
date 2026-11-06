@@ -11,6 +11,8 @@ export type Tool = 'select' | 'start' | 'mark' | 'probe';
 export interface AppState {
   cond: Conditions;
   leewayDeg: number;
+  /** Boat speed as a percentage of the polar (100 = as published). */
+  speedPct?: number;
   tackPenaltySec: number;
   upTwa: number | null;
   strategy: Strategy;
@@ -36,6 +38,7 @@ export interface AppState {
 export const initialState: AppState = {
   cond: { windFrom: 29, windKn: 12.6, windRef: 'ground', tideTo: 89, tideKn: 2 },
   leewayDeg: 0,
+  speedPct: 100,
   tackPenaltySec: 15,
   upTwa: 50,
   strategy: { mode: 'lane', margin: 0.2, maxTacks: 2 },
@@ -60,7 +63,7 @@ export const initialState: AppState = {
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
 ];
 
 function load(): AppState {
@@ -72,7 +75,7 @@ function load(): AppState {
 }
 
 /** The parts of the set-up that a course link carries. */
-const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'startAllowanceSec', 'leewayDeg', 'tackPenaltySec'];
+const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'startAllowanceSec', 'leewayDeg', 'speedPct', 'tackPenaltySec'];
 export const SITE_URL = 'https://sailing.georgejacques.com/';
 
 export function courseLink(s: AppState = state) {
@@ -129,7 +132,7 @@ export function setState(patch: Partial<AppState> | ((s: AppState) => Partial<Ap
   save();
 }
 
-const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec'];
+const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec'];
 /** Call before a user edit that should be undoable. */
 export function checkpoint() {
   const o: Partial<AppState> = {};

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { AppState, useApp } from './store';
-import { JEANNEAU_410 } from './nav/polar';
+import { JEANNEAU_410, Polar } from './nav/polar';
 import { resolveWind, solveLeg, startLineInfo, Rounding, BoatCfg, LegSolution, WindPair, StartLineInfo } from './nav/solve';
 import { Vec, mid, sub, bearingOf } from './nav/vec';
 import { startStrategy, StartStrategy } from './nav/start';
@@ -36,9 +36,22 @@ export interface CourseModel {
   startPlan: StartStrategy | null;
 }
 
-export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'upTwa' | 'strategy' | 'startAllowanceSec' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
+const scaled = new Map<string, { src: Polar; q: Polar }>();
+/** The polar with every speed scaled by pct/100. The best angles don't change, only the speeds. */
+export function scalePolar(p: Polar, pct: number): Polar {
+  if (Math.abs(pct - 100) < 1e-9) return p;
+  const key = `${p.id}@${pct}`;
+  const hit = scaled.get(key);
+  if (hit && hit.src === p) return hit.q;
+  const q = { ...p, id: key, stw: p.stw.map((r) => r.map((v) => (v * pct) / 100)) };
+  if (scaled.size > 50) scaled.clear();
+  scaled.set(key, { src: p, q });
+  return q;
+}
+
+export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'speedPct' | 'tackPenaltySec' | 'upTwa' | 'strategy' | 'startAllowanceSec' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
   const wind = resolveWind(s.cond);
-  const boat: BoatCfg = { polar: s.customPolar ?? JEANNEAU_410, leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec, upTwa: s.upTwa };
+  const boat: BoatCfg = { polar: scalePolar(s.customPolar ?? JEANNEAU_410, s.speedPct ?? 100), leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec, upTwa: s.upTwa };
   const points: CoursePoint[] = [];
   if (s.startLine) points.push({ pos: mid(s.startLine.committee, s.startLine.pin), label: 'Start' });
   for (const m of s.marks) points.push({ pos: m.pos, label: m.name, markId: m.id, rounding: m.rounding ?? 'port' });
@@ -85,6 +98,7 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
 export function useCourse(): CourseModel {
   const cond = useApp((s) => s.cond);
   const leewayDeg = useApp((s) => s.leewayDeg);
+  const speedPct = useApp((s) => s.speedPct);
   const tackPenaltySec = useApp((s) => s.tackPenaltySec);
   const strategy = useApp((s) => s.strategy);
   const upTwa = useApp((s) => s.upTwa);
@@ -96,8 +110,8 @@ export function useCourse(): CourseModel {
   const probe = useApp((s) => s.probe);
   const selectedLeg = useApp((s) => s.selectedLeg);
   return React.useMemo(
-    () => computeCourse({ cond, leewayDeg, tackPenaltySec, upTwa, strategy, startAllowanceSec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
-    [cond, leewayDeg, tackPenaltySec, upTwa, strategy, startAllowanceSec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
+    () => computeCourse({ cond, leewayDeg, speedPct, tackPenaltySec, upTwa, strategy, startAllowanceSec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
+    [cond, leewayDeg, speedPct, tackPenaltySec, upTwa, strategy, startAllowanceSec, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
   );
 }
 

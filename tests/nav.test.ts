@@ -435,3 +435,20 @@ describe('Solent racing marks', () => {
     expect(Math.hypot(m.pos.x, m.pos.y)).toBeLessThan(2); // near the Cowes origin
   });
 });
+
+describe('boat speed percentage', () => {
+  it('scales every polar speed but keeps the best angles', async () => {
+    const { scalePolar } = await import('../src/course');
+    const p = scalePolar(JEANNEAU_410, 90);
+    close(polarSpeed(p, 45, 12), 0.9 * polarSpeed(JEANNEAU_410, 45, 12), 1e-9);
+    close(optimalAngles(p, 12).up.twa, optimalAngles(JEANNEAU_410, 12).up.twa, 1e-9);
+    expect(scalePolar(JEANNEAU_410, 100)).toBe(JEANNEAU_410);
+  });
+  it('a slower boat takes longer round the course', async () => {
+    const { computeCourse } = await import('../src/course');
+    const { initialState } = await import('../src/store');
+    const a = computeCourse({ ...initialState, speedPct: 100 });
+    const b = computeCourse({ ...initialState, speedPct: 85 });
+    expect(b.totalH).toBeGreaterThan(a.totalH);
+  });
+});
