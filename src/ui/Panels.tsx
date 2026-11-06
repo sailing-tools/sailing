@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useApp, setState, checkpoint, getState, courseLink } from '../store';
 import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative, offBowText } from '../course';
-import { Dial, Speed } from './Dial';
+import { Dial, Speed, Slider } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
 import { Vec, len, add, mul, sub, bearingOf, norm180 } from '../nav/vec';
 import { Sailing, LegSolution, sailingAngles } from '../nav/solve';
@@ -152,11 +152,7 @@ export function StartPanel() {
         <p className="note">Leg 1 is a {plan.kind}, so there is no tack to choose. The favoured end is still shown below.</p>
       ) : null}
       {twoBoard && (
-        <div className="speed">
-          <label htmlFor="start-allow">Give up to</label>
-          <input id="start-allow" type="range" min={0} max={180} step={5} value={allowance} onPointerDown={checkpoint} onChange={(e) => setState({ startAllowanceSec: Number(e.target.value) })} />
-          <output htmlFor="start-allow">{allowance} s</output>
-        </div>
+        <Slider id="start-allow" label="Give up to" min={0} max={180} step={5} value={allowance} onStart={checkpoint} onChange={(v) => setState({ startAllowanceSec: v })} format={(v) => `${v} s`} />
       )}
       {twoBoard && <p className="small muted">How much time you'll give up on the quickest route to stay off the laylines and up-tide. 0 means fastest on paper.</p>}
       <div className="gains">
@@ -272,16 +268,8 @@ export function TackingPanel() {
       </div>
       {lane && (
         <>
-          <div className="speed">
-            <label htmlFor="lane-margin">Keep off by</label>
-            <input id="lane-margin" type="range" min={0.1} max={0.45} step={0.05} value={strategy.margin} onPointerDown={checkpoint} onChange={(e) => set({ margin: Number(e.target.value) })} />
-            <output htmlFor="lane-margin">{Math.round(strategy.margin * 100)}%</output>
-          </div>
-          <div className="speed">
-            <label htmlFor="lane-tacks">Most tacks</label>
-            <input id="lane-tacks" type="range" min={2} max={12} step={1} value={strategy.maxTacks} onPointerDown={checkpoint} onChange={(e) => set({ maxTacks: Number(e.target.value) })} />
-            <output htmlFor="lane-tacks">{strategy.maxTacks}</output>
-          </div>
+          <Slider id="lane-margin" label="Keep off by" min={0.1} max={0.45} step={0.05} value={strategy.margin} onStart={checkpoint} onChange={(v) => set({ margin: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider id="lane-tacks" label="Most tacks" min={2} max={12} step={1} value={strategy.maxTacks} onStart={checkpoint} onChange={(v) => set({ maxTacks: v })} format={(v) => `${v}`} />
           <p className="small muted">
             Two inner laylines sit this far in from the real ones, as a share of the gap between them. You {word} each time you reach one,
             then make the last {word} on the real layline. A wider margin keeps you nearer the middle and needs more {word}s.
@@ -363,11 +351,7 @@ function TwaSlider() {
   const value = upTwa ?? Math.round(best.twa);
   return (
     <div className="twa-set">
-      <div className="speed">
-        <label htmlFor="up-twa">Upwind angle</label>
-        <input id="up-twa" type="range" min={30} max={60} step={1} value={value} onPointerDown={checkpoint} onChange={(e) => setState({ upTwa: Number(e.target.value) })} />
-        <output htmlFor="up-twa">{value}° TWA</output>
-      </div>
+      <Slider id="up-twa" label="Upwind angle" min={30} max={60} step={1} value={value} onStart={checkpoint} onChange={(v) => setState({ upTwa: v })} format={(v) => `${v}° TWA`} />
       <p className="small muted">
         {upTwa == null
           ? `From the polar: best VMG is at ${best.twa.toFixed(0)}° in ${c.wind.water.kn.toFixed(1)} kn on the water. Slide to set your own.`
@@ -509,16 +493,8 @@ export function BoatPanel() {
       <div className="kv"><span>Upwind at {c.wind.water.kn.toFixed(1)} kn</span><b>TWA {opt.up.twa.toFixed(0)}°, {opt.up.stw.toFixed(1)} kn, VMG {opt.up.vmg.toFixed(1)}</b></div>
       {upTwa != null && <div className="kv"><span>Polar's best upwind</span><b>TWA {best.up.twa.toFixed(0)}°, VMG {best.up.vmg.toFixed(1)}</b></div>}
       <div className="kv"><span>Downwind</span><b>TWA {opt.down.twa.toFixed(0)}°, {opt.down.stw.toFixed(1)} kn, VMG {opt.down.vmg.toFixed(1)}</b></div>
-      <div className="speed">
-        <label htmlFor="leeway">Leeway</label>
-        <input id="leeway" type="range" min={0} max={8} step={0.5} value={leeway} onPointerDown={checkpoint} onChange={(e) => setState({ leewayDeg: Number(e.target.value) })} />
-        <output htmlFor="leeway">{leeway.toFixed(1)}°</output>
-      </div>
-      <div className="speed">
-        <label htmlFor="penalty">Tack cost</label>
-        <input id="penalty" type="range" min={0} max={60} step={1} value={penalty} onPointerDown={checkpoint} onChange={(e) => setState({ tackPenaltySec: Number(e.target.value) })} />
-        <output htmlFor="penalty">{penalty} s</output>
-      </div>
+      <Slider id="leeway" label="Leeway" min={0} max={8} step={0.5} value={leeway} onStart={checkpoint} onChange={(v) => setState({ leewayDeg: v })} format={(v) => `${v.toFixed(1)}°`} />
+      <Slider id="penalty" label="Tack cost" min={0} max={60} step={1} value={penalty} onStart={checkpoint} onChange={(v) => setState({ tackPenaltySec: v })} format={(v) => `${v} s`} />
       <div className="row">
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Cancel import' : 'Import polar'}</button>
         {custom && <button type="button" onClick={() => { checkpoint(); setState({ customPolar: null }); }}>Use Sun Odyssey 410</button>}
@@ -553,11 +529,7 @@ export function DisplayPanel() {
         <label className="check"><input id="ly-tri" type="checkbox" checked={layers.triangles} onChange={() => tog('triangles')} />Vector triangles</label>
         <label className="check"><input id="ly-tide" type="checkbox" checked={layers.tide} onChange={() => tog('tide')} />Tide arrows</label>
       </div>
-      <div className="speed">
-        <label htmlFor="vecmin">Vector length</label>
-        <input id="vecmin" type="range" min={2} max={60} step={1} value={vectorMin} onChange={(e) => setState({ vectorMin: Number(e.target.value) })} />
-        <output htmlFor="vecmin">{vectorMin} min</output>
-      </div>
+      <Slider id="vecmin" label="Vector length" min={2} max={60} step={1} value={vectorMin} onChange={(v) => setState({ vectorMin: v })} format={(v) => `${v} min`} />
       <p className="small muted">Vectors on the chart show where each velocity takes you in this many minutes.</p>
     </section>
   );
