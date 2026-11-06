@@ -231,6 +231,9 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
   .tackdetail { max-height: 150px; }
   .tackcard { gap: 6px; padding: 8px 10px; font-size: 12px; }
 }
+.start-hit { stroke-width: 26; }
+.chart-svg .start-line { pointer-events: none; }
+.start-line.picked { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
 .tackcard-nav { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font: 12px var(--f-data); }
 .tackcard-nav button { min-width: 36px; min-height: 32px; }
 .hint {
