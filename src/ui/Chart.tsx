@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { useApp, setState, getState, checkpoint, newId, AppState } from '../store';
-import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel } from '../course';
+import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel, tackNarrative } from '../course';
 import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf } from '../nav/vec';
 import { LegSolution, Sailing } from '../nav/solve';
 
 type Drag =
-  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null }
+  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null; tackIdx: number | null }
   | { kind: 'mark'; id: string }
   | { kind: 'committee' }
   | { kind: 'pin' }
@@ -25,6 +25,7 @@ export function Chart() {
   const selectedLeg = useApp((s) => s.selectedLeg);
   const probe = useApp((s) => s.probe);
   const vectorMin = useApp((s) => s.vectorMin);
+  const selTack = useApp((s) => s.selectedTack);
   const course = useCourse();
 
   React.useLayoutEffect(() => {
@@ -67,7 +68,12 @@ export function Chart() {
       return;
     }
     const legEl = (e.target as Element).closest?.('[data-leg]');
-    drag.current = { kind: 'pan', start: p, view: getState().view, moved: false, legIdx: legEl ? Number(legEl.getAttribute('data-leg')) : null };
+    const tackEl = (e.target as Element).closest?.('[data-tack]');
+    drag.current = {
+      kind: 'pan', start: p, view: getState().view, moved: false,
+      legIdx: legEl ? Number(legEl.getAttribute('data-leg')) : tackEl ? Number(tackEl.getAttribute('data-tleg')) : null,
+      tackIdx: tackEl ? Number(tackEl.getAttribute('data-tack')) : null,
+    };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -120,8 +126,14 @@ export function Chart() {
       }
     } else if (s.tool === 'probe') {
       setState({ probe: pos });
+    } else if (d.tackIdx !== null && d.legIdx !== null) {
+      const cur = s.selectedTack;
+      const same = cur && cur.leg === d.legIdx && cur.idx === d.tackIdx;
+      setState({ selectedLeg: d.legIdx, selectedTack: same ? null : { leg: d.legIdx, idx: d.tackIdx } });
     } else if (d.legIdx !== null) {
-      setState({ selectedLeg: d.legIdx });
+      setState({ selectedLeg: d.legIdx, selectedTack: s.selectedLeg === d.legIdx ? s.selectedTack : null });
+    } else if (s.selectedTack) {
+      setState({ selectedTack: null });
     }
   };
 
@@ -161,8 +173,17 @@ export function Chart() {
     );
   };
 
+  // Tack labels on a multi-tack leg are dropped where they would crowd the mark or each other.
+  const tackLabelAt: Vec[] = [];
+  const roomFor = (p: Vec, markS: Vec) => {
+    if (len(sub(p, markS)) < 45 || tackLabelAt.some((q) => len(sub(p, q)) < 40)) return false;
+    tackLabelAt.push(p);
+    return true;
+  };
+
   const legLayer = (leg: LegSolution, i: number) => {
     const sel = i === selectedLeg;
+    if (sel) tackLabelAt.length = 0;
     const A = toS(leg.from), B = toS(leg.to);
     const m = mid(A, B);
     const showLay = layers.laylines && leg.laylines && (sel || layers.allLaylines) && (leg.kind === 'beat' || leg.kind === 'run' || leg.kind === 'blocked');
@@ -178,21 +199,44 @@ export function Chart() {
           </g>
         )}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="rhumb" />
-        {leg.parts.map((pt, j) => (
-          <g key={j}>
-            {line(pt.start, pt.end, `track ${pt.sail.tack}`, { markerMid: undefined })}
-            {sel && label(mid(pt.start, pt.end), `${leg.kind === 'reach' ? 'CoG' : pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} ${fmtDeg(pt.sail.cog)} · ${fmtTime(pt.hours)}`, 'lbl track-t', 10)}
+        {sel && leg.lane && (leg.kind === 'beat' || leg.kind === 'run') && (
+          <g>
+            {line(leg.to, add(leg.to, mul(leg.lane.starboard, layLen)), 'layline inner stbd')}
+            {line(leg.to, add(leg.to, mul(leg.lane.port, layLen)), 'layline inner port')}
           </g>
-        ))}
+        )}
+        {leg.parts.map((pt, j) => {
+          const many = leg.parts.length > 2;
+          const isTack = j < leg.parts.length - 1 && leg.kind !== 'reach';
+          const tp = toS(pt.end);
+          const picked = sel && selTack?.leg === i && selTack.idx === j;
+          return (
+            <g key={j}>
+              {line(pt.start, pt.end, `track ${pt.sail.tack}${picked ? ' picked' : ''}`, { markerMid: undefined })}
+              {sel && (!many || pt.hours * k * len(pt.sail.ground) > 90) && label(mid(pt.start, pt.end), `${leg.kind === 'reach' ? 'CoG' : pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} ${fmtDeg(pt.sail.cog)} · ${fmtTime(pt.hours)}`, 'lbl track-t', 10)}
+              {sel && isTack && <circle cx={tp.x} cy={tp.y} r={picked ? 6 : 4.5} className={`tackdot ${pt.sail.tack}${picked ? ' picked' : ''}`} />}
+              {picked && <circle cx={tp.x} cy={tp.y} r={11} className="tack-ring" />}
+              {sel && isTack && (many ? roomFor(tp, toS(leg.to)) : !(i === 0 && layers.startOptions && course.start)) && label(pt.end, many ? `${leg.kind === 'beat' ? 'Tack' : 'Gybe'} ${j + 1} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}` : `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}`, 'lbl tackpt-t', -8)}
+            </g>
+          );
+        })}
         {layers.bothRoutes && leg.altParts && (sel || layers.allLaylines) && leg.altParts.map((pt, j) => (
           <g key={'alt' + j}>
             {line(pt.start, pt.end, `track alt ${pt.sail.tack}`)}
-            {sel && j === 0 && !(i === 0 && layers.startOptions && course.start) && label(pt.end, `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)}`, 'lbl tackpt-t', -8)}
+            {sel && j === 0 && leg.parts.length <= 2 && !(i === 0 && layers.startOptions && course.start) && label(pt.end, `${pt.sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(pt.hours)} · mark ${fmtDeg(bearingOf(sub(leg.to, pt.end)))}`, 'lbl tackpt-t', -8)}
           </g>
         ))}
-        {sel && leg.parts.length > 1 && !(i === 0 && layers.startOptions && course.start) && label(leg.parts[0].end, `${leg.parts[0].sail.tack === 'starboard' ? 'Stbd' : 'Port'} first: ${leg.kind === 'beat' ? 'tack' : 'gybe'} at ${fmtTime(leg.parts[0].hours)}`, 'lbl tackpt-t', -8)}
         {layers.triangles && leg.parts[0] && triangle(leg.from, leg.parts[0].sail, course.wind.tide, 'tri' + i, !sel)}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="hit" data-leg={i} />
+        {(leg.kind === 'beat' || leg.kind === 'run') && leg.parts.map((pt, j) => {
+          const S1 = toS(pt.start), S2 = toS(pt.end);
+          return (
+            <g key={'hit' + j} data-tack={j} data-tleg={i} className="tackhit">
+              <line x1={S1.x} y1={S1.y} x2={S2.x} y2={S2.y} className="hit board-hit" />
+              {sel && j < leg.parts.length - 1 && <circle cx={S2.x} cy={S2.y} r={20} className="tack-hit" />}
+            </g>
+          );
+        })}
         <g transform={`translate(${m.x},${m.y})`} data-leg={i} className="legno">
           <circle r={9} />
           <text dy="0.35em">{i + 1}</text>
@@ -227,7 +271,7 @@ export function Chart() {
                 <g key={r + ':' + j}>
                   {line(pt.start, pt.end, `track opt ${pt.sail.tack}`)}
                   {j === 0 && parts.length > 1 && (() => { const s2 = toS(pt.end); return <circle cx={s2.x} cy={s2.y} r={3} className={`tackdot ${pt.sail.tack}`} />; })()}
-                  {j === 0 && parts.length > 1 && label(pt.end, `${end === 'pin' ? 'Pin' : 'Cttee'}: ${pt.sail.tack === 'starboard' ? 'stbd' : 'port'} ${fmtTime(pt.hours)}, tack`, 'lbl opt-t', end === 'pin' ? 26 : 14)}
+                  {j === 0 && parts.length > 1 && label(pt.end, `${end === 'pin' ? 'Pin' : 'Cttee'}: ${pt.sail.tack === 'starboard' ? 'stbd' : 'port'} ${fmtTime(pt.hours)}, tack at mark ${fmtDeg(bearingOf(sub(l.to, pt.end)))}`, 'lbl opt-t', end === 'pin' ? 26 : 14)}
                 </g>
               )))}
             </g>
@@ -258,6 +302,7 @@ export function Chart() {
           const s = toS(m.pos);
           return (
             <g key={m.id} className="mark">
+              <RoundingArrow x={s.x} y={s.y} side={m.rounding ?? 'port'} />
               <circle cx={s.x} cy={s.y} r={7} className="buoy" />
               <text x={s.x + 11} y={s.y - 9} className="lbl mark-t">{m.name}</text>
               <circle cx={s.x} cy={s.y} r={18} className="hit-handle" onPointerDown={(e) => beginHandle(e, { kind: 'mark', id: m.id })} />
@@ -268,8 +313,23 @@ export function Chart() {
       </svg>
       <WindRose course={course} />
       <Hint tool={tool} pending={!!pendingCommittee} />
+      {tool === 'select' && selTack && <TackCard course={course} leg={selTack.leg} idx={selTack.idx} />}
       <div className="attrib">{base === 'chart' ? 'Coastline: ONS boundaries, OGL. Not for navigation.' : 'Grid in nautical miles from Cowes'}</div>
     </div>
+  );
+}
+
+/** Three-quarter arc round a mark, arrow showing the way round: anticlockwise for port, clockwise for starboard. */
+function RoundingArrow({ x, y, side }: { x: number; y: number; side: 'port' | 'starboard' }) {
+  const r = 13;
+  const port = side === 'port';
+  // Screen y points down, so sweep-flag 0 is anticlockwise on screen.
+  const a0 = port ? -0.25 * Math.PI : 1.25 * Math.PI, a1 = port ? -1.75 * Math.PI : 2.75 * Math.PI;
+  const P = (a: number) => `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
+  return (
+    <path d={`M${P(a0)} A${r},${r} 0 1 ${port ? 0 : 1} ${P(a1)}`} className={`rounding ${side}`} markerEnd={`url(#ah-round-${side})`}>
+      <title>Leave to {side}</title>
+    </path>
   );
 }
 
@@ -283,6 +343,11 @@ function Defs() {
       {(['water', 'ground', 'tide'] as const).map((t, i) => (
         <marker key={t} id={`ah-${t}`} viewBox="-20 -6 22 12" refX={0} refY={0} markerWidth={22} markerHeight={12} markerUnits="userSpaceOnUse" orient="auto">
           <path d={chev([1, 2, 3][i])} className={`ah ah-${t}`} />
+        </marker>
+      ))}
+      {(['port', 'starboard'] as const).map((sd) => (
+        <marker key={sd} id={`ah-round-${sd}`} viewBox="-8 -5 9 10" refX={0} refY={0} markerWidth={8} markerHeight={8} markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M-7,-3.5 L0,0 L-7,3.5" className={`ah-round ${sd}`} />
         </marker>
       ))}
       <marker id="ah-small" viewBox="-10 -5 11 10" refX={0} refY={0} markerWidth={10} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
@@ -401,6 +466,25 @@ function WindRose({ course }: { course: CourseModel }) {
         <div><b>Wind</b> {fmtDeg(ground.from)} {ground.kn.toFixed(1)} kn</div>
         <div className="muted">on water {fmtDeg(water.from)} {water.kn.toFixed(1)} kn</div>
         <div className="tide-t"><b>Tide</b> {fmtDeg(bearingOf(t))} {tr.toFixed(1)} kn</div>
+      </div>
+    </div>
+  );
+}
+
+function TackCard({ course, leg, idx }: { course: CourseModel; leg: number; idx: number }) {
+  const l = course.legs[leg];
+  if (!l || !l.parts[idx] || (l.kind !== 'beat' && l.kind !== 'run')) return null;
+  const n = l.parts.length;
+  const go = (j: number) => setState({ selectedTack: { leg, idx: j } });
+  const to = course.points[leg + 1];
+  return (
+    <div className="tackcard" role="status" aria-live="polite">
+      <p>{tackNarrative(l, idx, to?.label ?? 'the mark', to?.rounding)}</p>
+      <div className="tackcard-nav">
+        <button type="button" onClick={() => go(idx - 1)} disabled={idx === 0} aria-label="Previous board">‹</button>
+        <span>{idx + 1} / {n}</span>
+        <button type="button" onClick={() => go(idx + 1)} disabled={idx === n - 1} aria-label="Next board">›</button>
+        <button type="button" onClick={() => setState({ selectedTack: null })} aria-label="Close">×</button>
       </div>
     </div>
   );

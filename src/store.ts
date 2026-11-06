@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { Vec } from './nav/vec';
-import { Conditions } from './nav/solve';
+import { Conditions, Strategy } from './nav/solve';
 import { Polar } from './nav/polar';
 
-export interface Mark { id: string; name: string; pos: Vec }
+/** rounding: which side the mark is left on. Absent means port, the usual default. */
+export interface Mark { id: string; name: string; pos: Vec; rounding?: 'port' | 'starboard' }
 
 export type Tool = 'select' | 'start' | 'mark' | 'probe';
 
@@ -11,6 +12,8 @@ export interface AppState {
   cond: Conditions;
   leewayDeg: number;
   tackPenaltySec: number;
+  upTwa: number | null;
+  strategy: Strategy;
   customPolar: Polar | null;
   startLine: { committee: Vec; pin: Vec } | null;
   pendingCommittee: Vec | null;
@@ -19,6 +22,8 @@ export interface AppState {
   base: 'chart' | 'grid';
   tool: Tool;
   selectedLeg: number;
+  /** A board picked on the chart or in the tacking table: its leg and index in that leg's parts. */
+  selectedTack: { leg: number; idx: number } | null;
   probe: Vec | null;
   layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean };
   vectorMin: number;
@@ -30,6 +35,8 @@ export const initialState: AppState = {
   cond: { windFrom: 250, windKn: 12, windRef: 'ground', tideTo: 80, tideKn: 1.8 },
   leewayDeg: 0,
   tackPenaltySec: 15,
+  upTwa: null,
+  strategy: { mode: 'laylines', margin: 0.25, maxTacks: 4 },
   customPolar: null,
   startLine: { committee: { x: 3.16, y: 1.61 }, pin: { x: 3.22, y: 1.38 } },
   pendingCommittee: null,
@@ -41,6 +48,7 @@ export const initialState: AppState = {
   base: 'chart',
   tool: 'select',
   selectedLeg: 0,
+  selectedTack: null,
   probe: null,
   layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true },
   vectorMin: 6,
@@ -49,7 +57,7 @@ export const initialState: AppState = {
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'tackPenaltySec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
 ];
 
 function load(): AppState {
@@ -60,7 +68,40 @@ function load(): AppState {
   return initialState;
 }
 
-let state: AppState = load();
+/** The parts of the set-up that a course link carries. */
+const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'leewayDeg', 'tackPenaltySec'];
+export const SITE_URL = 'https://sailing.georgejacques.com/';
+
+export function courseLink(s: AppState = state) {
+  const o: Partial<AppState> = {};
+  for (const k of SHARE) (o as any)[k] = s[k];
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${SITE_URL}#c=${b64}`;
+}
+
+/** Read a course from a #c=... link, or null. */
+export function parseCourseHash(hash: string): Partial<AppState> | null {
+  const m = /[#&]c=([A-Za-z0-9_-]+)/.exec(hash);
+  if (!m) return null;
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const o = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    const out: Partial<AppState> = {};
+    for (const k of SHARE) if (k in o) (out as any)[k] = o[k];
+    return out;
+  } catch { return null; }
+}
+
+function fromLink(base: AppState): AppState {
+  try {
+    const o = parseCourseHash(location.hash);
+    if (!o) return base;
+    history.replaceState(null, '', location.pathname + location.search);
+    return { ...base, ...o, selectedLeg: 0, probe: null };
+  } catch { return base; }
+}
+
+let state: AppState = fromLink(load());
 const listeners = new Set<() => void>();
 const undoStack: string[] = [];
 let saveTimer: number | undefined;
@@ -85,7 +126,7 @@ export function setState(patch: Partial<AppState> | ((s: AppState) => Partial<Ap
   save();
 }
 
-const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec'];
+const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy'];
 /** Call before a user edit that should be undoable. */
 export function checkpoint() {
   const o: Partial<AppState> = {};
