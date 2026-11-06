@@ -19,12 +19,12 @@ export function ConditionsPanel() {
         <div className="pair-col">
           <h3>Wind <span className="muted">over the ground</span></h3>
           <Dial id="wind" label="Wind direction" kind="from" value={cond.windFrom} onStart={checkpoint} onChange={(v) => set({ windFrom: v })} />
-          <Speed id="wind-kn" label="Speed" max={35} value={cond.windKn} onStart={checkpoint} onChange={(v) => set({ windKn: v })} />
+          <Speed id="wind-kn" label="Speed" max={35} nudge={0.5} value={cond.windKn} onStart={checkpoint} onChange={(v) => set({ windKn: v })} />
         </div>
         <div className="pair-col tide-col">
           <h3>Tide <span className="muted">set and rate</span></h3>
           <Dial id="tide" label="Tide direction" kind="to" value={cond.tideTo} onStart={checkpoint} onChange={(v) => set({ tideTo: v })} />
-          <Speed id="tide-kn" label="Rate" max={5} value={cond.tideKn} onStart={checkpoint} onChange={(v) => set({ tideKn: v })} />
+          <Speed id="tide-kn" label="Rate" max={5} nudge={0.1} value={cond.tideKn} onStart={checkpoint} onChange={(v) => set({ tideKn: v })} />
         </div>
       </div>
       <p className="readout">
