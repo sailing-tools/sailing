@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useApp, setState, getState, checkpoint, newId, AppState } from '../store';
 import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel, tackNarrative } from '../course';
-import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf } from '../nav/vec';
+import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf, norm180, D2R } from '../nav/vec';
 import { LegSolution, Sailing } from '../nav/solve';
 
 type Drag =
@@ -350,6 +350,9 @@ function Defs() {
           <path d="M-7,-3.5 L0,0 L-7,3.5" className={`ah-round ${sd}`} />
         </marker>
       ))}
+      <marker id="td-ah" viewBox="-8 -5 9 10" refX={0} refY={0} markerWidth={8} markerHeight={8} markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M-7,-3.5 L0,0 L-7,3.5" className="ah-td" />
+      </marker>
       <marker id="ah-small" viewBox="-10 -5 11 10" refX={0} refY={0} markerWidth={10} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
         <path d="M-8,-3.5 L0,0 L-8,3.5" className="ah ah-tidefield" />
       </marker>
@@ -477,16 +480,95 @@ function TackCard({ course, leg, idx }: { course: CourseModel; leg: number; idx:
   const n = l.parts.length;
   const go = (j: number) => setState({ selectedTack: { leg, idx: j } });
   const to = course.points[leg + 1];
+  const tp = l.parts[idx].end;
+  const zoomTo = () => {
+    const v = getState().view;
+    setState({ view: { cx: tp.x, cy: tp.y, scale: Math.max(v.scale, Math.min(6000, v.scale * 3)) } });
+  };
   return (
     <div className="tackcard" role="status" aria-live="polite">
+      <TackDetail course={course} leg={l} idx={idx} markLabel={to?.label ?? 'Mark'} />
       <p>{tackNarrative(l, idx, to?.label ?? 'the mark', to?.rounding)}</p>
       <div className="tackcard-nav">
+        <button type="button" className="zoom-btn" onClick={zoomTo}>Zoom chart here</button>
         <button type="button" onClick={() => go(idx - 1)} disabled={idx === 0} aria-label="Previous board">‹</button>
         <span>{idx + 1} / {n}</span>
         <button type="button" onClick={() => go(idx + 1)} disabled={idx === n - 1} aria-label="Next board">›</button>
         <button type="button" onClick={() => setState({ selectedTack: null })} aria-label="Close">×</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Close-up of one tack, north up and not to scale: the board in and out, the heading (CTW) the boat is on,
+ * the line of sight to the mark, and the angle between them, with wind and tide for reference.
+ */
+function TackDetail({ course, leg, idx, markLabel }: { course: CourseModel; leg: LegSolution; idx: number; markLabel: string }) {
+  const W = 300, H = 190, cx = W / 2, cy = H / 2 + 6;
+  const p = leg.parts[idx];
+  const next = leg.parts[idx + 1];
+  const last = !next;
+  const brg = bearingOf(sub(leg.to, p.end));
+  const at = (b: number, r: number) => ({ x: cx + r * Math.sin(b * D2R), y: cy - r * Math.cos(b * D2R) });
+  const ln = (a: Vec, b: Vec, cls: string, marker?: string) => <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={cls} markerEnd={marker} />;
+  // Labels sit past the end of their line and are kept inside the box.
+  const tx = (q: Vec, text: string, cls: string, dx = 0, dy = 0) => {
+    const w = text.length * 6.3;
+    let x = q.x + dx;
+    let anchor: 'start' | 'end' | 'middle' = q.x < cx - 10 ? 'end' : q.x > cx + 10 ? 'start' : 'middle';
+    const left = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+    if (left < 4) { x = 4; anchor = 'start'; } else if (left + w > W - 4) { x = W - 4; anchor = 'end'; }
+    return <text x={x} y={Math.min(H - 18, Math.max(12, q.y + dy))} textAnchor={anchor} className={cls}>{text}</text>;
+  };
+  const inFrom = at(p.sail.cog + 180, 72);
+  const head = at(p.sail.heading, 58);
+  const sight = at(brg, 74);
+  const rel = norm180(brg - p.sail.heading);
+  const R = 34;
+  const a0 = at(p.sail.heading, R), a1 = at(brg, R);
+  const arc = `M${a0.x},${a0.y} A${R},${R} 0 0 ${rel > 0 ? 1 : 0} ${a1.x},${a1.y}`;
+  const mid = at(p.sail.heading + rel / 2, R + 12);
+  const hull = (b: number) => {
+    // A simple hull outline pointing along bearing b, 22px long.
+    const pts = [[0, -11], [4.5, -2], [4, 8], [-4, 8], [-4.5, -2]].map(([x, y]) => {
+      const c = Math.cos(b * D2R), s2 = Math.sin(b * D2R);
+      return `${(cx + x * c - y * s2).toFixed(1)},${(cy + x * s2 + y * c).toFixed(1)}`;
+    });
+    return <polygon points={pts.join(' ')} className={`td-hull ${p.sail.tack}`} />;
+  };
+  const wind = course.wind.water;
+  const wFrom = { x: 26 + 14 * Math.sin(wind.from * D2R), y: 26 - 14 * Math.cos(wind.from * D2R) };
+  const wTo = { x: 26 - 14 * Math.sin(wind.from * D2R), y: 26 + 14 * Math.cos(wind.from * D2R) };
+  const t = course.wind.tide, tr = len(t);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="tackdetail" role="img"
+      aria-label={`${last ? 'Final board' : 'Tack'}: heading ${fmtDeg(p.sail.heading)}, ${markLabel} ${Math.round(Math.abs(rel))} degrees off the ${rel >= 0 ? 'starboard' : 'port'} bow, bearing ${fmtDeg(brg)} true`}>
+      <rect x={0} y={0} width={W} height={H} className="td-bg" rx={6} />
+      {ln(wFrom, wTo, 'td-wind', 'url(#td-ah)')}
+      <text x={26} y={52} textAnchor="middle" className="td-t muted-t">wind</text>
+      {tr > 0.05 && (
+        <>
+          {ln({ x: W - 26 - (t.x / tr) * 13, y: 26 + (t.y / tr) * 13 }, { x: W - 26 + (t.x / tr) * 13, y: 26 - (t.y / tr) * 13 }, 'td-tide', 'url(#td-ah)')}
+          <text x={W - 26} y={50} textAnchor="middle" className="td-t tide-t">tide {tr.toFixed(1)}</text>
+        </>
+      )}
+      {ln(inFrom, { x: cx, y: cy }, `td-track ${p.sail.tack}`)}
+      {next && ln({ x: cx, y: cy }, at(next.sail.cog, 72), `td-track ${next.sail.tack}`, 'url(#td-ah)')}
+      {ln({ x: cx, y: cy }, sight, 'td-sight')}
+      <circle cx={sight.x} cy={sight.y} r={5} className="buoy" />
+      {tx(sight, `${markLabel} ${fmtDeg(brg)}T`, 'td-t mark-t', 0, -9)}
+      {ln({ x: cx, y: cy }, head, 'td-head')}
+      {tx(head, `CTW ${fmtDeg(p.sail.heading)}`, 'td-t', 0, -5)}
+      <path d={arc} className="td-arc" />
+      {tx(mid, `${Math.round(Math.abs(rel))}° ${rel >= 0 ? 'stbd' : 'port'}`, 'td-t td-rel', 0, 4)}
+      {hull(p.sail.heading)}
+      <text x={W / 2} y={H - 6} textAnchor="middle" className="td-t muted-t">
+        <tspan className={p.sail.tack === 'starboard' ? 'stbd-t' : 'port-t'}>in: {p.sail.tack === 'starboard' ? 'stbd' : 'port'} CoG {fmtDeg(p.sail.cog)}</tspan>
+        {next && <tspan className={next.sail.tack === 'starboard' ? 'stbd-t' : 'port-t'}>{'  '}out: {next.sail.tack === 'starboard' ? 'stbd' : 'port'} CTW {fmtDeg(next.sail.heading)}</tspan>}
+        <tspan>{'  '}· not to scale</tspan>
+      </text>
+    </svg>
   );
 }
 

@@ -61,14 +61,22 @@ export function Dial({ id, value, onChange, kind, label, onStart }: {
   );
 }
 
-export function Speed({ id, value, onChange, max, label, onStart, step = 0.1 }: {
-  id: string; value: number; onChange: (v: number) => void; max: number; label: string; onStart?: () => void; step?: number;
+export function Speed({ id, value, onChange, max, label, onStart, step = 0.1, nudge = 0.5 }: {
+  id: string; value: number; onChange: (v: number) => void; max: number; label: string; onStart?: () => void; step?: number; nudge?: number;
 }) {
+  const bump = (d: number) => {
+    onStart?.();
+    onChange(Math.min(max, Math.max(0, Math.round((value + d) * 10) / 10)));
+  };
   return (
-    <div className="speed">
+    <div className="speed speed-nudge">
       <label htmlFor={id}>{label}</label>
       <input id={id} type="range" min={0} max={max} step={step} value={value} onPointerDown={onStart} onChange={(e) => onChange(Number(e.target.value))} />
-      <output htmlFor={id}>{value.toFixed(1)} kn</output>
+      <div className="nudge">
+        <button type="button" onClick={() => bump(-nudge)} disabled={value <= 0} aria-label={`${label} minus ${nudge} knots`}>−</button>
+        <output htmlFor={id}>{value.toFixed(1)} kn</output>
+        <button type="button" onClick={() => bump(nudge)} disabled={value >= max} aria-label={`${label} plus ${nudge} knots`}>+</button>
+      </div>
     </div>
   );
 }

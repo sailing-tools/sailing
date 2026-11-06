@@ -192,6 +192,31 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
   font-size: 13px; display: flex; flex-direction: column; gap: 8px;
 }
 .tackcard p { margin: 0; line-height: 1.4; }
+.tackdetail { width: 100%; height: auto; display: block; }
+.td-bg { fill: var(--paper); stroke: var(--line); }
+.td-t { font: 10.5px var(--f-data); fill: var(--ink); }
+.muted-t { fill: var(--muted); }
+.td-track { stroke-width: 2.6; fill: none; }
+.td-track.starboard { stroke: var(--stbd); }
+.td-track.port { stroke: var(--port); }
+.td-sight { stroke: var(--mark); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.td-head { stroke: var(--ink); stroke-width: 1.4; }
+.td-arc { fill: none; stroke: var(--accent); stroke-width: 2; }
+.td-rel { font-weight: 600; fill: var(--accent); font-size: 12px; }
+.td-hull { stroke: var(--ink); stroke-width: 1; }
+.td-hull.starboard { fill: var(--stbd); }
+.td-hull.port { fill: var(--port); }
+.td-wind { stroke: var(--ink); stroke-width: 1.8; }
+.td-tide { stroke: var(--tide); stroke-width: 1.8; }
+.ah-td { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.zoom-btn { margin-right: auto; }
+@media (min-width: 900px) {
+  .tackcard { left: auto; right: 12px; top: 230px; bottom: auto; transform: none; width: 330px; max-height: calc(100% - 250px); overflow-y: auto; }
+}
+@media (max-width: 899px) {
+  .tackdetail { max-height: 150px; }
+  .tackcard { gap: 6px; padding: 8px 10px; font-size: 12px; }
+}
 .tackcard-nav { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font: 12px var(--f-data); }
 .tackcard-nav button { min-width: 36px; min-height: 32px; }
 .hint {
@@ -227,10 +252,13 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
 .dial-ah { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .dial-from .dial-ah { stroke: var(--ink); }
 .dial-to .dial-ah { stroke: var(--tide); }
+.speed-nudge { grid-template-columns: auto minmax(0, 1fr); row-gap: 4px; }
+.speed-nudge .nudge { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.speed-nudge .nudge output { flex: 1; text-align: center; }
 .dial-num { display: flex; align-items: center; gap: 4px; font-family: var(--f-data); }
 .dial-num input { width: 52px; text-align: right; padding: 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); font-variant-numeric: tabular-nums; }
 .dial-num .unit { font-size: 11px; color: var(--muted); }
-.dial-num button, .marklist button, .row button, .panel > button {
+.nudge button, .dial-num button, .marklist button, .row button, .panel > button {
   border: 1px solid var(--line); background: var(--paper); border-radius: 5px; padding: 4px 9px; cursor: pointer; min-height: 30px;
 }
 button:focus-visible, input:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
