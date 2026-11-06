@@ -192,6 +192,31 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
   font-size: 13px; display: flex; flex-direction: column; gap: 8px;
 }
 .tackcard p { margin: 0; line-height: 1.4; }
+.tackdetail { width: 100%; height: auto; display: block; }
+.td-bg { fill: var(--paper); stroke: var(--line); }
+.td-t { font: 10.5px var(--f-data); fill: var(--ink); }
+.muted-t { fill: var(--muted); }
+.td-track { stroke-width: 2.6; fill: none; }
+.td-track.starboard { stroke: var(--stbd); }
+.td-track.port { stroke: var(--port); }
+.td-sight { stroke: var(--mark); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.td-head { stroke: var(--ink); stroke-width: 1.4; }
+.td-arc { fill: none; stroke: var(--accent); stroke-width: 2; }
+.td-rel { font-weight: 600; fill: var(--accent); font-size: 12px; }
+.td-hull { stroke: var(--ink); stroke-width: 1; }
+.td-hull.starboard { fill: var(--stbd); }
+.td-hull.port { fill: var(--port); }
+.td-wind { stroke: var(--ink); stroke-width: 1.8; }
+.td-tide { stroke: var(--tide); stroke-width: 1.8; }
+.ah-td { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.zoom-btn { margin-right: auto; }
+@media (min-width: 900px) {
+  .tackcard { left: auto; right: 12px; top: 230px; bottom: auto; transform: none; width: 330px; max-height: calc(100% - 250px); overflow-y: auto; }
+}
+@media (max-width: 899px) {
+  .tackdetail { max-height: 150px; }
+  .tackcard { gap: 6px; padding: 8px 10px; font-size: 12px; }
+}
 .tackcard-nav { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font: 12px var(--f-data); }
 .tackcard-nav button { min-width: 36px; min-height: 32px; }
 .hint {
