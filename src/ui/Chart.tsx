@@ -3,9 +3,11 @@ import { useApp, setState, getState, checkpoint, newId, AppState } from '../stor
 import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel, tackNarrative } from '../course';
 import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf, norm180, D2R } from '../nav/vec';
 import { LegSolution, Sailing } from '../nav/solve';
+import { SOLENT_MARKS, RacingMark } from '../data/solentMarks';
+import { solentPos, solentToMark, colourName, fmtLatLon } from '../marks';
 
 type Drag =
-  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null; tackIdx: number | null; onLine: boolean }
+  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null; tackIdx: number | null; onLine: boolean; lib: string | null }
   | { kind: 'mark'; id: string }
   | { kind: 'committee'; start?: Vec; moved?: boolean }
   | { kind: 'pin'; start?: Vec; moved?: boolean }
@@ -28,6 +30,7 @@ export function Chart() {
   const selTack = useApp((s) => s.selectedTack);
   const course = useCourse();
   const [lineCard, setLineCard] = React.useState(false);
+  const [libCard, setLibCard] = React.useState<string | null>(null);
   React.useEffect(() => { if (selTack) setLineCard(false); }, [selTack]);
   const toggleLineCard = () => setLineCard((v) => { if (!v) setState({ selectedTack: null }); return !v; });
 
@@ -77,6 +80,7 @@ export function Chart() {
       legIdx: legEl ? Number(legEl.getAttribute('data-leg')) : tackEl ? Number(tackEl.getAttribute('data-tleg')) : null,
       tackIdx: tackEl ? Number(tackEl.getAttribute('data-tack')) : null,
       onLine: !!(e.target as Element).closest?.('[data-startline]'),
+      lib: (e.target as Element).closest?.('[data-lib]')?.getAttribute('data-lib') ?? null,
     };
   };
 
@@ -125,7 +129,8 @@ export function Chart() {
     if (s.tool === 'mark') {
       checkpoint();
       const n = s.marks.length + 1;
-      setState({ marks: [...s.marks, { id: newId(), name: `Mark ${n}`, pos }] });
+      const lm = d.lib ? SOLENT_MARKS.find((m) => m.code === d.lib) : undefined;
+      setState({ marks: [...s.marks, lm ? solentToMark(lm) : { id: newId(), name: `Mark ${n}`, pos }] }); // snap to a Solent mark
     } else if (s.tool === 'start') {
       if (!s.pendingCommittee) setState({ pendingCommittee: pos });
       else {
@@ -134,7 +139,12 @@ export function Chart() {
       }
     } else if (s.tool === 'probe') {
       setState({ probe: pos });
+    } else if (d.lib) {
+      setLineCard(false);
+      if (s.selectedTack) setState({ selectedTack: null });
+      setLibCard(libCard === d.lib ? null : d.lib);
     } else if (d.onLine) {
+      setLibCard(null);
       toggleLineCard();
     } else if (d.tackIdx !== null && d.legIdx !== null) {
       const cur = s.selectedTack;
@@ -145,6 +155,7 @@ export function Chart() {
     } else {
       if (s.selectedTack) setState({ selectedTack: null });
       setLineCard(false);
+      setLibCard(null);
     }
   };
 
@@ -313,6 +324,21 @@ export function Chart() {
             {label(probe, `${fmtTime(course.probeLeg.timeH)} to ${course.points[Math.min(selectedLeg + 1, course.points.length - 1)]?.label}`, 'lbl probe-t', -14)}
           </g>
         )}
+        {layers.racingMarks && (
+          <g className="libmarks">
+            {SOLENT_MARKS.map((m) => {
+              const q = toS(solentPos(m));
+              if (q.x < -20 || q.y < -20 || q.x > w + 20 || q.y > h + 20) return null;
+              return (
+                <g key={m.code} data-lib={m.code} className={`libmark${libCard === m.code ? ' picked' : ''}`}>
+                  <path d={`M${q.x},${q.y - 5}L${q.x + 5},${q.y}L${q.x},${q.y + 5}L${q.x - 5},${q.y}Z`} className={`libdot c-${m.colour[0]}`} />
+                  {k >= 120 && <text x={q.x + 7} y={q.y + 3.5} className="lbl lib-t">{m.code}</text>}
+                  {(tool === 'select' || tool === 'mark') && <circle cx={q.x} cy={q.y} r={13} className="lib-hit" />}
+                </g>
+              );
+            })}
+          </g>
+        )}
         {tool === 'select' && startLine && line(startLine.committee, startLine.pin, 'hit start-hit', { 'data-startline': '1' } as React.SVGProps<SVGLineElement>)}
         {tool === 'select' && <g className="tackhits">{tackHits()}</g>}
         {startLine && (
@@ -342,6 +368,7 @@ export function Chart() {
       </svg>
       <WindRose course={course} />
       <Hint tool={tool} pending={!!pendingCommittee} />
+      {tool === 'select' && libCard && (() => { const m = SOLENT_MARKS.find((x) => x.code === libCard); return m ? <RacingMarkCard m={m} onClose={() => setLibCard(null)} /> : null; })()}
       {tool === 'select' && lineCard && startLine && <StartLineCard committee={startLine.committee} pin={startLine.pin} course={course} onClose={() => setLineCard(false)} />}
       {tool === 'select' && selTack && <TackCard course={course} leg={selTack.leg} idx={selTack.idx} />}
       <div className="attrib">{base === 'chart' ? 'Coastline: ONS boundaries, OGL. Not for navigation.' : 'Grid in nautical miles from Cowes'}</div>
@@ -499,6 +526,25 @@ function WindRose({ course }: { course: CourseModel }) {
         <div><b>Wind</b> {fmtDeg(ground.from)} {ground.kn.toFixed(1)} kn</div>
         <div className="muted">on water {fmtDeg(water.from)} {water.kn.toFixed(1)} kn</div>
         <div className="tide-t"><b>Tide</b> {fmtDeg(bearingOf(t))} {tr.toFixed(1)} kn</div>
+      </div>
+    </div>
+  );
+}
+
+/** A Solent racing mark tapped on the chart, with a button to add it to the course. */
+function RacingMarkCard({ m, onClose }: { m: RacingMark; onClose: () => void }) {
+  const marks = useApp((s) => s.marks);
+  const inCourse = marks.some((x) => x.code === m.code);
+  return (
+    <div className="tackcard linecard" role="status" aria-live="polite">
+      <div className="kv"><span><b>{m.code}</b> {m.name}</span><b>{colourName(m.colour)}</b></div>
+      <div className="kv"><span>Position</span><b>{fmtLatLon(m.lat, m.lon)}</b></div>
+      {m.note && <p className="small muted">{m.note}</p>}
+      <div className="tackcard-nav">
+        <button type="button" className="primary" style={{ marginRight: 'auto' }} onClick={() => { checkpoint(); setState({ marks: [...marks, solentToMark(m)] }); onClose(); }}>
+          {inCourse ? 'Add to course again' : 'Add to course'}
+        </button>
+        <button type="button" onClick={onClose} aria-label="Close">×</button>
       </div>
     </div>
   );

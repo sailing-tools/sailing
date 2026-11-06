@@ -231,6 +231,15 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
   .tackdetail { max-height: 150px; }
   .tackcard { gap: 6px; padding: 8px 10px; font-size: 12px; }
 }
+.libdot { stroke: var(--ink); stroke-width: 0.8; opacity: 0.85; }
+.libdot.c-Y { fill: #f2c200; } .libdot.c-R { fill: var(--port); } .libdot.c-G { fill: var(--stbd); } .libdot.c-B { fill: #222; } .libdot.c-W { fill: #fff; }
+.libmark.picked .libdot { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+.lib-t { fill: var(--muted); font-size: 9.5px; pointer-events: none; }
+.lib-hit { fill: transparent; cursor: pointer; }
+.tool-start .lib-hit, .tool-probe .lib-hit { pointer-events: none; }
+.addmark { display: flex; flex-direction: column; gap: 6px; }
+.addmark label { font-size: 12px; color: var(--muted); }
+.addmark input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
 .start-hit { stroke-width: 26; }
 .chart-svg .start-line { pointer-events: none; }
 .start-line.picked { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }

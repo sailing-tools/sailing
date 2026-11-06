@@ -411,3 +411,27 @@ describe('start anywhere on the line', () => {
     expect(s.best!.belowLine).toBe(false);
   });
 });
+
+describe('Solent racing marks', () => {
+  it('has the SCRA list with unique codes and Solent positions', async () => {
+    const { SOLENT_MARKS } = await import('../src/data/solentMarks');
+    expect(SOLENT_MARKS.length).toBe(157);
+    expect(new Set(SOLENT_MARKS.map((m) => m.code)).size).toBe(157);
+    const g = SOLENT_MARKS.find((m) => m.code === '3U')!;
+    expect(g.name).toBe('Gurnard');
+    close(g.lat, 50 + 46.22 / 60, 1e-6);
+    close(g.lon, -(1 + 18.84 / 60), 1e-6);
+  });
+  it('finds a mark by code, by "code name" and by name, and adds it at its position', async () => {
+    const { findSolentMark, solentToMark, fmtLatLon } = await import('../src/marks');
+    expect(findSolentMark('3u')?.name).toBe('Gurnard');
+    expect(findSolentMark('33 Prince Consort')?.code).toBe('33');
+    expect(findSolentMark('prince consort')?.code).toBe('33');
+    expect(findSolentMark('East Kn')?.code).toBe('4H');
+    expect(findSolentMark('zz')).toBeUndefined();
+    const m = solentToMark(findSolentMark('3U')!);
+    expect(m.code).toBe('3U');
+    expect(fmtLatLon(50 + 46.22 / 60, -(1 + 18.84 / 60))).toBe("50°46.22'N 1°18.84'W");
+    expect(Math.hypot(m.pos.x, m.pos.y)).toBeLessThan(2); // near the Cowes origin
+  });
+});
