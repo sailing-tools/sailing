@@ -378,10 +378,36 @@ describe('leg 1 follows the start strategy', () => {
     for (const cond of [initialState.cond, { windFrom: 37, windKn: 11.6, windRef: 'ground' as const, tideTo: 95, tideKn: 0.6 }]) {
       const c = computeCourse({ ...initialState, cond, upTwa: 44 });
       const best = c.startPlan!.best!;
+      expect(c.points[0].pos).toEqual(best.from);
+      if (c.legs[0].kind === 'reach') { expect(best.parts.length).toBe(1); continue; } // laid from the line
       expect(c.legs[0].parts).toBe(best.parts);
       expect(c.legs[0].altParts).toBeUndefined();
       expect(c.legs[0].timeH).toBeCloseTo(best.timeH, 9);
       expect(c.legs[0].rounding?.ok).toBe(best.roundsOk);
     }
+  });
+});
+
+describe('start anywhere on the line', () => {
+  it('starts where the starboard layline crosses the line rather than sailing back to it', () => {
+    const w = { from: 0, kn: 12 };
+    const mark = { x: 0, y: 1 };
+    // The starboard layline to the mark crosses this line between the pin and the committee boat.
+    // With no time to give up, the quickest start is on the layline. (With an allowance, staying off the layline can win.)
+    const s = startStrategy({ x: 1.6, y: 0 }, { x: 0.4, y: 0 }, mark, w, { x: 0, y: 0 }, { ...boat, tackPenaltySec: 15 }, undefined, { allowanceSec: 0 });
+    const best = s.best!;
+    expect(best.end).toBe('line');
+    expect(best.onLayline).toBe('starboard');
+    expect(best.first).toBe('starboard');
+    expect(best.parts.length).toBe(1);
+    for (const r of s.routes.filter((r) => r.end !== 'line')) expect(best.timeH).toBeLessThan(r.timeH);
+    expect(best.fromPinM).toBeGreaterThan(0);
+    expect(best.fromPinM).toBeLessThan(1.2 * 1852);
+  });
+  it('never recommends a first board that heads back below the line', () => {
+    const w = { from: 0, kn: 12 };
+    // Committee end well outside the starboard layline: port first runs along and below the line.
+    const s = startStrategy({ x: 0.6, y: 0 }, { x: -0.2, y: 0.2 }, { x: -0.6, y: 1.2 }, w, { x: 0, y: 0 }, boat);
+    expect(s.best!.belowLine).toBe(false);
   });
 });

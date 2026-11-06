@@ -5,9 +5,17 @@ import {
 } from './solve';
 
 export type End = 'pin' | 'committee';
+/** Where on the line a route starts: one of the ends, or the point where a layline crosses the line. */
+export type StartAt = End | 'line';
 
 export interface StartRoute {
-  end: End;
+  end: StartAt;
+  /** The start point. */
+  from: Vec;
+  /** Metres along the line from the pin. */
+  fromPinM: number;
+  /** For a start on the line: the board whose layline crosses there. */
+  onLayline?: Side;
   first: Side;
   /** 'laylines': two boards, tacking on the layline. 'lane': staying off the laylines. */
   plan: 'laylines' | 'lane';
@@ -24,6 +32,8 @@ export interface StartRoute {
   downTide: number | null;
   /** nearLayline plus downTide, 0 (safe) to 2. */
   risk: number;
+  /** True when the first board heads back behind the start line (below its extension). Never recommended. */
+  belowLine: boolean;
 }
 
 export interface StartOptions { margin: number; maxTacks: number; allowanceSec: number }
@@ -37,7 +47,7 @@ export interface StartStrategy {
   favoured: End | 'even';
   /** The quickest route, ignoring risk. */
   fastest: StartRoute | null;
-  /** The safest route within the time allowance of the fastest. */
+  /** The safest route within the time allowance of the fastest. Within one tack of each other, starboard first wins. */
   best: StartRoute | null;
   /** Which side of the course is up-tide, as the board that takes you there, or null in slack water. */
   upTideSide: Side | null;
@@ -99,11 +109,33 @@ export function startStrategy(
   const still = { pin: solveLeg(pin, mark, wind, calm, boat), committee: solveLeg(committee, mark, wind, calm, boat) };
   const kind = legs.pin.kind;
   const routes: StartRoute[] = [];
+  // Unit normal to the line, pointing to the course side (towards the mark).
+  const lineN = (() => {
+    const d = norm(sub(committee, pin));
+    const n = { x: -d.y, y: d.x };
+    return dot(n, sub(mark, mul(add(committee, pin), 0.5))) < 0 ? mul(n, -1) : n;
+  })();
+  const behind = (parts: Part[]) => parts.length > 0 && dot(norm(sub(parts[0].end, parts[0].start)), lineN) < -0.02;
   let upTideSide: Side | null = null;
   if (kind === 'beat' || kind === 'run') {
     const pair = tackPair(wind, tide, boat, kind === 'beat' ? 'up' : 'down');
-    for (const end of ['pin', 'committee'] as End[]) {
-      const from = ends[end];
+    // Time to the mark is linear along the line while both boards are needed, so the quickest start is at an end
+    // or where a layline crosses the line: from there one board lays the mark.
+    const starts: { end: StartAt; from: Vec; u: number; onLayline?: Side }[] = [{ end: 'pin', from: pin, u: 0 }, { end: 'committee', from: committee, u: 1 }];
+    const s0 = twoTack(pin, mark, pair.starboard.ground, pair.port.ground);
+    const s1 = twoTack(committee, mark, pair.starboard.ground, pair.port.ground);
+    if (s0 && s1) {
+      for (const [side, v0, v1] of [['starboard', s0.b, s1.b], ['port', s0.a, s1.a]] as [Side, number, number][]) {
+        if (v0 === v1) continue;
+        const u = v0 / (v0 - v1);
+        const q = add(pin, mul(sub(committee, pin), u));
+        const t = twoTack(q, mark, pair.starboard.ground, pair.port.ground);
+        if (u > 0.02 && u < 0.98 && t && t.a >= -1e-9 && t.b >= -1e-9) starts.push({ end: 'line', from: q, u, onLayline: side });
+      }
+    }
+    const lineM = len(sub(committee, pin)) * 1852;
+    for (const st of starts) {
+      const { end, from } = st;
       const sol = twoTack(from, mark, pair.starboard.ground, pair.port.ground);
       const T = sol ? sol.a + sol.b : 0;
       const minBoard = Math.max(60 / 3600, 2 * penaltyH, 0.05 * T);
@@ -127,10 +159,11 @@ export function startStrategy(
             upTideSide = sAcross > 0 ? 'starboard' : 'port';
           }
           routes.push({
-            end, first: parts[0].sail.tack, plan, parts, roundsOk,
+            end, from, fromPinM: st.u * lineM, onLayline: st.onLayline, first: parts[0].sail.tack, plan, parts, roundsOk,
             timeH: sailed + (roundsOk ? 0 : penaltyH),
             tackBearing: parts.length > 1 ? bearingOf(sub(mark, parts[0].end)) : undefined,
             nearLayline: ex.nearLayline, downTide: ex.downTide, risk: ex.nearLayline + (ex.downTide ?? 0),
+            belowLine: behind(parts),
           });
         }
       }
@@ -138,16 +171,18 @@ export function startStrategy(
   } else {
     for (const end of ['pin', 'committee'] as End[]) {
       const l = legs[end];
-      if (l.parts.length) routes.push({ end, first: l.parts[0].sail.tack, plan: 'laylines', parts: l.parts, roundsOk: true, timeH: l.timeH, nearLayline: 0, downTide: null, risk: 0 });
+      if (l.parts.length) routes.push({ end, from: ends[end], fromPinM: end === 'pin' ? 0 : len(sub(committee, pin)) * 1852, first: l.parts[0].sail.tack, plan: 'laylines', parts: l.parts, roundsOk: true, timeH: l.timeH, nearLayline: 0, downTide: null, risk: 0, belowLine: false });
     }
   }
-  const fastestAt = (end: End) => Math.min(...routes.filter((r) => r.end === end).map((r) => r.timeH), Infinity);
+  const fastestAt = (end: StartAt) => Math.min(...routes.filter((r) => r.end === end).map((r) => r.timeH), Infinity);
   const wind_ = (still.committee.timeH - still.pin.timeH) * 3600;
   const total = (fastestAt('committee') - fastestAt('pin')) * 3600;
   const ok = isFinite(total);
   const gainS = { wind: isFinite(wind_) ? wind_ : NaN, tide: ok && isFinite(wind_) ? total - wind_ : NaN, total: ok ? total : NaN };
   const favoured: StartStrategy['favoured'] = !ok || Math.abs(total) < 2 ? 'even' : total > 0 ? 'pin' : 'committee';
-  const valid = routes.filter((r) => isFinite(r.timeH));
+  const finite = routes.filter((r) => isFinite(r.timeH));
+  const above = finite.filter((r) => !r.belowLine);
+  const valid = above.length ? above : finite;
   const byTime = (a: StartRoute, b: StartRoute) => {
     if (Math.abs(a.timeH - b.timeH) * 3600 > 2) return a.timeH - b.timeH;
     if (a.end !== b.end && favoured !== 'even') return a.end === favoured ? -1 : 1;
@@ -156,6 +191,12 @@ export function startStrategy(
   };
   const fastest = [...valid].sort(byTime)[0] ?? null;
   const within = fastest ? valid.filter((r) => (r.timeH - fastest.timeH) * 3600 <= options.allowanceSec + 1e-6) : [];
-  const best = [...within].sort((a, b) => (Math.abs(a.risk - b.risk) > 0.05 ? a.risk - b.risk : byTime(a, b)))[0] ?? fastest;
+  // Starting on port means giving way to the starboard fleet, so a port-first edge of one tack or less isn't worth it.
+  const pick = (a: StartRoute, b: StartRoute) => {
+    if (Math.abs(a.risk - b.risk) > 0.05) return a.risk - b.risk;
+    if (a.end === b.end && a.first !== b.first && Math.abs(a.timeH - b.timeH) <= penaltyH + 2 / 3600) return a.first === 'starboard' ? -1 : 1;
+    return byTime(a, b);
+  };
+  const best = [...within].sort(pick)[0] ?? fastest;
   return { line, kind, routes, gainS, favoured, fastest, best, upTideSide, options };
 }
