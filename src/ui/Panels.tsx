@@ -515,6 +515,7 @@ export function BoatPanel() {
   const custom = useApp((s) => s.customPolar);
   const leeway = useApp((s) => s.leewayDeg);
   const penalty = useApp((s) => s.tackPenaltySec);
+  const speedPct = useApp((s) => s.speedPct ?? 100);
   const upTwa = useApp((s) => s.upTwa);
   const c = useCourse();
   const [text, setText] = React.useState('');
@@ -541,6 +542,8 @@ export function BoatPanel() {
       <div className="kv"><span>Downwind</span><b>TWA {opt.down.twa.toFixed(0)}°, {opt.down.stw.toFixed(1)} kn, VMG {opt.down.vmg.toFixed(1)}</b></div>
       <Slider id="leeway" label="Leeway" min={0} max={8} step={0.5} value={leeway} onStart={checkpoint} onChange={(v) => setState({ leewayDeg: v })} format={(v) => `${v.toFixed(1)}°`} />
       <Slider id="penalty" label="Tack cost" min={0} max={60} step={1} value={penalty} onStart={checkpoint} onChange={(v) => setState({ tackPenaltySec: v })} format={(v) => `${v} s`} />
+      <Slider id="speed-pct" label="Boat speed" min={50} max={110} step={1} value={speedPct} onStart={checkpoint} onChange={(v) => setState({ speedPct: v })} format={(v) => `${v}% of polar`} />
+      <p className="small muted">Scales every speed in the polar. Use it when you know you sail slower (or faster) than the polar: for example 90% turns 6.8 kn into 6.1 kn. The angles stay the same.</p>
       <div className="row">
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Cancel import' : 'Import polar'}</button>
         {custom && <button type="button" onClick={() => { checkpoint(); setState({ customPolar: null }); }}>Use Sun Odyssey 410</button>}
