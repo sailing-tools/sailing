@@ -106,7 +106,7 @@ function velocities(r: Fix[], w = 3): (Vec | null)[] {
 const meanDir = (vs: Vec[]) => bearingOf(vs.reduce((s, v) => add(s, norm(v)), { x: 0, y: 0 }));
 
 /** Split the track into boards where the course changes by more than `turnDeg` from the recent mean. */
-export function splitBoards(r: Fix[], windFrom: number, turnDeg = 40, minS = 30): Board[] {
+export function splitBoards(r: Fix[], windFrom: number, turnDeg = 40, minS = 30, marks: Vec[] = []): Board[] {
   const v = velocities(r);
   const segs: number[][] = [];
   let cur: number[] = [];
@@ -120,8 +120,20 @@ export function splitBoards(r: Fix[], windFrom: number, turnDeg = 40, minS = 30)
     cur.push(i);
   }
   if (cur.length) segs.push(cur);
+  // A rounding can turn less than turnDeg (a beat into a broad reach); cut boards at the closest pass of a mark.
+  const near = (k: number) => Math.min(Infinity, ...marks.map((m) => len(sub(r[k].p, m))));
+  const cut = segs.flatMap((s) => {
+    const out: number[][] = [];
+    let a = 0;
+    for (let j = 1; j + 1 < s.length; j++) {
+      const d = near(s[j]);
+      if (d < 0.06 && d <= near(s[j - 1]) && d < near(s[j + 1]) && j - a >= 3 && s.length - j >= 3) { out.push(s.slice(a, j + 1)); a = j; }
+    }
+    out.push(s.slice(a));
+    return out;
+  });
   const boards: Board[] = [];
-  for (const s of segs) {
+  for (const s of cut) {
     const a = r[s[0]], b = r[s[s.length - 1]];
     const dt = b.t - a.t;
     if (dt < minS) continue;
@@ -190,7 +202,7 @@ export function analyseTrack(fixes: Fix[], o: AnalyseOptions): TrackAnalysis {
     };
     return [mk(b.t0, startT, 'prestart'), mk(startT, b.t1)];
   });
-  let boards = race(splitBoards(r, o.windFrom));
+  let boards = race(splitBoards(r, o.windFrom, 40, 30, o.marks));
   // Mean ground velocity on each tack: boards of 90 s or more, time-weighted, dropping boards more than
   // 10° off the others (a start along the line, or footing to a mark after an overstand).
   const meanOf = (k: BoardKind, bs: Board[]) => {
@@ -213,7 +225,7 @@ export function analyseTrack(fixes: Fix[], o: AnalyseOptions): TrackAnalysis {
   let wind = gs && gp ? windFromTacks(gs, gp, o.twa, o.polar) : null;
   if (wind) {
     // Classify again against the wind the track itself gives.
-    boards = race(splitBoards(r, wind.from));
+    boards = race(splitBoards(r, wind.from, 40, 30, o.marks));
     gs = meanOf('starboard', boards); gp = meanOf('port', boards);
     wind = gs && gp ? windFromTacks(gs, gp, o.twa, o.polar) : wind;
   }
@@ -246,6 +258,8 @@ export function analyseTrack(fixes: Fix[], o: AnalyseOptions): TrackAnalysis {
       if (!up(b.kind) || !up(c.kind) || b.kind === c.kind) continue;
       const mi = o.marks.findIndex((m) => len(sub(c.to, m)) < 0.06); // within about 110 m
       if (mi < 0) continue;
+      // A board that starts at a rounding is the next leg, not a beat to this mark.
+      if (o.marks.some((m) => len(sub(b.to, m)) < 0.06 || len(sub(b.from, m)) < 0.06)) continue;
       const m = o.marks[mi];
       const lay = c.kind === 'starboard' ? wind.starboard : wind.port; // the board that fetches the mark
       const u = norm(sub(b.to, b.from));
@@ -268,3 +282,28 @@ export function groundWind(waterFrom: number, waterKn: number, tide: Vec) {
   return { from: norm360(bearingOf(g) + 180), kn: len(g) };
 }
 
+
+/**
+ * The start: the first time the track crosses the line from the pre-start side to the course side (the side
+ * the first mark is on) and goes on to sail `awayNm` clear of the line without coming back. Seconds from the first fix, or null.
+ */
+export function findStart(fixes: Fix[], committee: Vec, pin: Vec, firstMark: Vec, awayNm = 0.25): number | null {
+  const l = sub(committee, pin);
+  const side = (p: Vec) => Math.sign(cross(l, sub(p, pin)));
+  const dist = (p: Vec) => Math.abs(cross(norm(l), sub(p, pin)));
+  const course = side(firstMark);
+  if (!course) return null;
+  const r = resample(fixes, 2);
+  for (let i = 1; i < r.length; i++) {
+    if (side(r[i - 1].p) === course || side(r[i].p) !== course) continue;
+    // Crossed onto the course side between the ends (with 50 m slack)...
+    const a = r[i - 1].p, b = r[i].p, u = sub(b, a);
+    const s = crossAt(pin, norm(l), a, norm(u));
+    if (s === null || s < -0.03 || s > len(l) + 0.03) continue;
+    // ...and sailed well clear up the course before coming back: a pre-start dip doesn't count.
+    let ok = false;
+    for (let j = i; j < r.length && side(r[j].p) === course; j++) if (dist(r[j].p) > awayNm) { ok = true; break; }
+    if (ok) return r[i].t;
+  }
+  return null;
+}

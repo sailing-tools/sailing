@@ -81,7 +81,7 @@ export function CoursePanel() {
   return (
     <section className="panel" aria-labelledby="h-course">
       <h2 id="h-course">Course</h2>
-      {!startLine && <p className="muted">No start line yet. Use Start line in the toolbar.</p>}
+      {!startLine && <p className="muted">No start line yet. Use Start line in the toolbar, or ping it in Start line above.</p>}
       <ol className="marklist">
         {marks.map((m, i) => (
           <li key={m.id}>
@@ -578,6 +578,7 @@ export function DisplayPanel() {
         <label className="check"><input id="ly-tri" type="checkbox" checked={layers.triangles} onChange={() => tog('triangles')} />Vector triangles</label>
         <label className="check"><input id="ly-rm" type="checkbox" checked={layers.racingMarks} onChange={() => tog('racingMarks')} />Solent racing marks</label>
         <label className="check"><input id="ly-tide" type="checkbox" checked={layers.tide} onChange={() => tog('tide')} />Tide arrows</label>
+        <label className="check"><input id="ly-trk" type="checkbox" checked={layers.track !== false} onChange={() => setState((s) => ({ layers: { ...s.layers, track: s.layers.track === false } }))} />GPS track</label>
       </div>
       <Slider id="vecmin" label="Vector length" min={2} max={60} step={1} value={vectorMin} onChange={(v) => setState({ vectorMin: v })} format={(v) => `${v} min`} />
       <p className="small muted">Vectors on the chart show where each velocity takes you in this many minutes.</p>

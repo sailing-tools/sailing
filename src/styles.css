@@ -366,3 +366,22 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
   .pair { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* GPS track */
+.gps-trk { fill: none; stroke-width: 2; stroke-linejoin: round; opacity: 0.9; }
+.gps-trk.starboard { stroke: var(--stbd); }
+.gps-trk.port { stroke: var(--port); }
+.gps-trk.downwind, .gps-trk.reach { stroke: var(--accent); }
+.gps-trk.prestart { stroke: var(--muted); stroke-dasharray: 3 3; opacity: 0.6; }
+.gps-start { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+.shiftchart { margin: 10px 0; }
+.shiftchart svg { width: 100%; height: auto; display: block; }
+.shiftchart .axis { stroke: var(--line); }
+.shiftchart .tick { fill: var(--muted); font: 9.5px var(--f-data); }
+.shiftchart .dot.starboard { fill: var(--stbd); }
+.shiftchart .dot.port { fill: var(--port); }
+.filebtn { position: relative; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; background: var(--panel); font-weight: 500; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+input.short { width: 7em; flex: none; }
+.seg.small button { padding: 5px 10px; }

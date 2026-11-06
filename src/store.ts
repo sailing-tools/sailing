@@ -31,7 +31,7 @@ export interface AppState {
   probe: Vec | null;
   layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean; track?: boolean };
   /** An imported GPS track: positions in nm on the local plane, t in seconds from the first fix. */
-  track?: { name: string; startUnix: number; fixes: { t: number; x: number; y: number }[] } | null;
+  track?: { name: string; startUnix: number; fixes: { t: number; x: number; y: number }[]; /** Gun time in seconds from the first fix; absent means found from the start line. */ gunT?: number; /** Upwind TWA to analyse with; absent means the boat's. */ twa?: number } | null;
   vectorMin: number;
   view: { cx: number; cy: number; scale: number }; // scale = px per nm
 }
