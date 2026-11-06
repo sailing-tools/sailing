@@ -14,6 +14,8 @@ export interface AppState {
   tackPenaltySec: number;
   upTwa: number | null;
   strategy: Strategy;
+  /** Seconds you'd give up at the start to stay off the laylines and up-tide. */
+  startAllowanceSec: number;
   customPolar: Polar | null;
   startLine: { committee: Vec; pin: Vec } | null;
   pendingCommittee: Vec | null;
@@ -37,6 +39,7 @@ export const initialState: AppState = {
   tackPenaltySec: 15,
   upTwa: 50,
   strategy: { mode: 'lane', margin: 0.2, maxTacks: 2 },
+  startAllowanceSec: 30,
   customPolar: null,
   startLine: { committee: { x: 2.488, y: 0.039 }, pin: { x: 1.973, y: -0.058 } },
   pendingCommittee: null,
@@ -57,7 +60,7 @@ export const initialState: AppState = {
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
 ];
 
 function load(): AppState {
@@ -69,7 +72,7 @@ function load(): AppState {
 }
 
 /** The parts of the set-up that a course link carries. */
-const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'leewayDeg', 'tackPenaltySec'];
+const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'startAllowanceSec', 'leewayDeg', 'tackPenaltySec'];
 export const SITE_URL = 'https://sailing.georgejacques.com/';
 
 export function courseLink(s: AppState = state) {
@@ -126,7 +129,7 @@ export function setState(patch: Partial<AppState> | ((s: AppState) => Partial<Ap
   save();
 }
 
-const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy'];
+const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec'];
 /** Call before a user edit that should be undoable. */
 export function checkpoint() {
   const o: Partial<AppState> = {};

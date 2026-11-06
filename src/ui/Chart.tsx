@@ -282,6 +282,7 @@ export function Chart() {
           <g className="start-opt">
             {course.startPlan.routes.map((r, ri) => {
               const best = r === course.startPlan!.best;
+              if (!best && r.plan !== 'laylines') return null; // the lane variants would crowd the chart
               return (
                 <g key={'so' + ri} className={best ? 'so-best' : r.roundsOk ? '' : 'so-wrong'}>
                   {r.parts.map((pt, j) => <g key={j}>{line(pt.start, pt.end, `track opt ${pt.sail.tack}${best ? ' best' : ''}`)}</g>)}

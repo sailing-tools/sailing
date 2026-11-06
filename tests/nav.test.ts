@@ -313,19 +313,20 @@ describe('start strategy', () => {
     const s = startStrategy(square.committee, square.pin, mark, w, { x: 0, y: 0 }, boat);
     expect(Math.abs(s.gainS.total)).toBeLessThan(2);
     expect(s.favoured).toBe('even');
-    expect(s.routes.length).toBe(4);
-    expect(s.best!.first).toBe('starboard'); // tie goes to right of way
+    expect(s.routes.filter((r) => r.plan === 'laylines').length).toBe(4);
+    expect(s.fastest!.first).toBe('starboard'); // tie goes to right of way
   });
   it('a line biased to the pin gives the wind gain to the pin', () => {
     const s = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0.03 }, mark, w, { x: 0, y: 0 }, boat);
     expect(s.gainS.wind).toBeGreaterThan(5);
     close(s.gainS.tide, 0, 1e-6);
     expect(s.favoured).toBe('pin');
-    expect(s.best!.end).toBe('pin');
+    expect(s.fastest!.end).toBe('pin');
   });
   it('splits wind and tide, and tide can outweigh the bias', () => {
     // Pin slightly upwind, but a strong stream setting west makes the committee (east) end pay.
-    const s = startStrategy({ x: 0.3, y: 0 }, { x: -0.3, y: 0.01 }, { x: -0.6, y: 1.5 }, w, fromBearing(270, 2.5), boat);
+    // A stream across the line (setting south) changes how long each end takes to reach the mark.
+    const s = startStrategy({ x: 0.3, y: 0 }, { x: -0.3, y: 0.01 }, { x: -0.6, y: 1.5 }, w, fromBearing(200, 2), boat);
     close(s.gainS.wind + s.gainS.tide, s.gainS.total, 1e-6);
     expect(s.gainS.wind).toBeGreaterThan(0);
     expect(Math.sign(s.gainS.tide)).not.toBe(0);
@@ -333,10 +334,39 @@ describe('start strategy', () => {
   it('charges an extra tack for arriving on the wrong board', () => {
     const pen = { ...boat, tackPenaltySec: 20 };
     const s = startStrategy(square.committee, square.pin, mark, w, { x: 0, y: 0 }, pen, { side: 'port', nextBearing: 180 });
-    const fromPin = s.routes.filter((r) => r.end === 'pin');
+    const fromPin = s.routes.filter((r) => r.end === 'pin' && r.plan === 'laylines');
     const good = fromPin.find((r) => r.roundsOk)!, bad = fromPin.find((r) => !r.roundsOk)!;
     expect(good.parts[good.parts.length - 1].sail.tack).toBe('starboard');
     close((bad.timeH - good.timeH) * 3600, 20, 1);
     expect(s.best!.roundsOk).toBe(true);
+  });
+});
+
+describe('start strategy risk', () => {
+  const w = { from: 0, kn: 12 };
+  const mark = { x: 0, y: 2 };
+  it('a layline route spends more of the beat near a layline than a lane route', () => {
+    const s = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, { x: 0, y: 0 }, boat, undefined, { margin: 0.2, maxTacks: 4 });
+    const lay = s.routes.find((r) => r.end === 'pin' && r.plan === 'laylines' && r.first === 'starboard')!;
+    const lane = s.routes.find((r) => r.end === 'pin' && r.plan === 'lane' && r.first === 'starboard')!;
+    expect(lay.nearLayline).toBeGreaterThan(lane.nearLayline + 0.2);
+    expect(lane.parts.length).toBeGreaterThan(2);
+  });
+  it('allowance 0 picks the fastest; a big allowance picks the safer route', () => {
+    const pen = { ...boat, tackPenaltySec: 10 };
+    const fast = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, { x: 0, y: 0 }, pen, undefined, { allowanceSec: 0 });
+    close(fast.best!.timeH, fast.fastest!.timeH, 1e-9); // only equal-time routes are allowed
+    const safe = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, { x: 0, y: 0 }, pen, undefined, { allowanceSec: 120 });
+    expect(safe.best!.risk).toBeLessThan(safe.fastest!.risk);
+    expect(safe.best!.plan).toBe('lane');
+  });
+  it('knows the up-tide side and counts time down-tide', () => {
+    // Stream setting east, so west is up-tide. With the wind from the north, starboard tack heads west of north.
+    const s = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, fromBearing(90, 1), boat);
+    expect(s.upTideSide).toBe('starboard');
+    const stbd = s.routes.find((r) => r.end === 'pin' && r.plan === 'laylines' && r.first === 'starboard')!;
+    const port = s.routes.find((r) => r.end === 'pin' && r.plan === 'laylines' && r.first === 'port')!;
+    expect(stbd.downTide!).toBeLessThan(port.downTide!);
+    expect(startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0 }, mark, w, { x: 0, y: 0 }, boat).upTideSide).toBe(null);
   });
 });
