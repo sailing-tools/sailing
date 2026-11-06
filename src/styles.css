@@ -126,6 +126,17 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
 .handle-t { fill: var(--muted); text-anchor: middle; font-size: 10px; }
 .probe-t { fill: var(--accent); text-anchor: middle; font-weight: 600; }
 
+.rounding { fill: none; stroke-width: 1.6; }
+.rounding.port { stroke: var(--port); }
+.rounding.starboard { stroke: var(--stbd); }
+.ah-round { fill: none; stroke-width: 1.6; }
+.ah-round.port { stroke: var(--port); }
+.ah-round.starboard { stroke: var(--stbd); }
+.share { margin-top: 10px; }
+.share-link { display: block; width: 100%; margin-top: 6px; font: 11px var(--f-data); padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+.round-btn { min-width: 44px; font-weight: 600; }
+.round-btn.port-c { color: var(--port); }
+.round-btn.stbd-c { color: var(--stbd); }
 .buoy { fill: var(--mark); stroke: var(--ink); stroke-width: 1.2; }
 .committee { fill: var(--committee); }
 .committee.pending { opacity: 0.5; }

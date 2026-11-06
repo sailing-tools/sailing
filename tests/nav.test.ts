@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fromBearing, bearingOf, add, len, sub, mul, norm180 } from '../src/nav/vec';
 import { JEANNEAU_410, polarSpeed, optimalAngles } from '../src/nav/polar';
-import { resolveWind, solveReach, solveLeg, startLineInfo, twoTack, tackBearings, laneParts, tackPair, sailingAngles, BoatCfg, Strategy } from '../src/nav/solve';
+import { resolveWind, solveReach, solveLeg, startLineInfo, twoTack, tackBearings, laneParts, tackPair, sailingAngles, roundsCorrectly, BoatCfg, Strategy } from '../src/nav/solve';
 
 const boat: BoatCfg = { polar: JEANNEAU_410, leewayDeg: 0, tackPenaltySec: 0 };
 const close = (a: number, b: number, tol = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(tol);
@@ -239,5 +239,54 @@ describe('own upwind angle', () => {
     const to = { x: Math.sin(42 * Math.PI / 180) * 2, y: Math.cos(42 * Math.PI / 180) * 2 };
     expect(solveLeg({ x: 0, y: 0 }, to, w, { x: 0, y: 0 }, { ...boat, upTwa: 45 }).kind).toBe('beat');
     expect(solveLeg({ x: 0, y: 0 }, to, w, { x: 0, y: 0 }, { ...boat, upTwa: 40 }).kind).toBe('reach');
+  });
+});
+
+describe('rounding side', () => {
+  const w = { from: 0, kn: 12 };
+  const from = { x: 0, y: 0 };
+  // Mark a little to the left of dead upwind, so the longer board comes first on port without a rounding rule.
+  const mark = { x: -0.3, y: 2 };
+  const down = 180; // next leg runs back downwind
+  it('a left turn leaves the mark to port', () => {
+    expect(roundsCorrectly(315, { side: 'port', nextBearing: 180 })).toBe(true);
+    expect(roundsCorrectly(45, { side: 'port', nextBearing: 180 })).toBe(false);
+    expect(roundsCorrectly(45, { side: 'starboard', nextBearing: 180 })).toBe(true);
+  });
+  for (const tideKn of [0, 1.5]) {
+    it(`windward mark to port: final board is starboard (tide ${tideKn} kn)`, () => {
+      const tide = fromBearing(90, tideKn);
+      for (const strat of [undefined, { mode: 'lane', margin: 0.3, maxTacks: 4 } as Strategy, { mode: 'lane', margin: 0.3, maxTacks: 3 } as Strategy]) {
+        const leg = solveLeg(from, mark, w, tide, boat, strat, { side: 'port', nextBearing: down });
+        expect(leg.parts[leg.parts.length - 1].sail.tack).toBe('starboard');
+        expect(leg.rounding!.ok).toBe(true);
+        close(len(sub(leg.parts[leg.parts.length - 1].end, mark)), 0, 1e-9);
+        if (leg.altParts) expect(leg.altParts[leg.altParts.length - 1].sail.tack).toBe('starboard');
+      }
+    });
+    it(`windward mark to starboard: final board is port (tide ${tideKn} kn)`, () => {
+      const leg = solveLeg(from, mark, w, fromBearing(90, tideKn), boat, undefined, { side: 'starboard', nextBearing: down });
+      expect(leg.parts[leg.parts.length - 1].sail.tack).toBe('port');
+      expect(leg.rounding!.ok).toBe(true);
+    });
+  }
+  it('flags a reach that turns the wrong way round the mark', () => {
+    // Reach east to a mark, then turn north: a left turn, so leaving it to starboard is wrong.
+    const leg = solveLeg(from, { x: 1, y: 0 }, w, { x: 0, y: 0 }, boat, undefined, { side: 'starboard', nextBearing: 0 });
+    expect(leg.kind).toBe('reach');
+    expect(leg.rounding!.ok).toBe(false);
+  });
+});
+
+import { parseCourseHash } from '../src/store';
+describe('course link', () => {
+  it('reads a course from a link hash and ignores junk', () => {
+    const course = { marks: [{ id: 'a', name: 'Wíndward', pos: { x: 1, y: 2 }, rounding: 'port' }], finishAtStart: true, tool: 'mark' };
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(course)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const o = parseCourseHash('#c=' + b64)!;
+    expect((o.marks as any)[0].name).toBe('Wíndward');
+    expect('tool' in o).toBe(false);
+    expect(parseCourseHash('#c=!!!')).toBe(null);
+    expect(parseCourseHash('')).toBe(null);
   });
 });

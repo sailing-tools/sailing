@@ -3,7 +3,8 @@ import { Vec } from './nav/vec';
 import { Conditions, Strategy } from './nav/solve';
 import { Polar } from './nav/polar';
 
-export interface Mark { id: string; name: string; pos: Vec }
+/** rounding: which side the mark is left on. Absent means port, the usual default. */
+export interface Mark { id: string; name: string; pos: Vec; rounding?: 'port' | 'starboard' }
 
 export type Tool = 'select' | 'start' | 'mark' | 'probe';
 
@@ -64,7 +65,40 @@ function load(): AppState {
   return initialState;
 }
 
-let state: AppState = load();
+/** The parts of the set-up that a course link carries. */
+const SHARE: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'upTwa', 'strategy', 'leewayDeg', 'tackPenaltySec'];
+export const SITE_URL = 'https://sailing.georgejacques.com/';
+
+export function courseLink(s: AppState = state) {
+  const o: Partial<AppState> = {};
+  for (const k of SHARE) (o as any)[k] = s[k];
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${SITE_URL}#c=${b64}`;
+}
+
+/** Read a course from a #c=... link, or null. */
+export function parseCourseHash(hash: string): Partial<AppState> | null {
+  const m = /[#&]c=([A-Za-z0-9_-]+)/.exec(hash);
+  if (!m) return null;
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const o = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    const out: Partial<AppState> = {};
+    for (const k of SHARE) if (k in o) (out as any)[k] = o[k];
+    return out;
+  } catch { return null; }
+}
+
+function fromLink(base: AppState): AppState {
+  try {
+    const o = parseCourseHash(location.hash);
+    if (!o) return base;
+    history.replaceState(null, '', location.pathname + location.search);
+    return { ...base, ...o, selectedLeg: 0, probe: null };
+  } catch { return base; }
+}
+
+let state: AppState = fromLink(load());
 const listeners = new Set<() => void>();
 const undoStack: string[] = [];
 let saveTimer: number | undefined;

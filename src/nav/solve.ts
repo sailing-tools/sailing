@@ -169,6 +169,20 @@ export function tackBearings(gs: Vec, gp: Vec, margin = 0) {
   };
 }
 
+export type Side = 'port' | 'starboard';
+
+/** How the boat must leave the mark at the end of a leg, and where it goes next. */
+export interface Rounding { side: Side; nextBearing: number }
+
+/**
+ * Leaving a mark to port means turning left (anticlockwise) round it, to starboard means turning right.
+ * True when arriving on ground track `cog` and turning onto `nextBearing` goes the right way round.
+ */
+export function roundsCorrectly(cog: number, r: Rounding) {
+  const turn = norm180(r.nextBearing - cog);
+  return r.side === 'port' ? turn < 0 : turn > 0;
+}
+
 export type Part = { sail: Sailing; hours: number; start: Vec; end: Vec };
 
 /**
@@ -237,15 +251,30 @@ export interface LegSolution {
   lane?: { starboard: Vec; port: Vec; bearings: { starboard: number; port: number }; margin: number };
   reach: ReachSolution;
   note?: string;
+  /** Set when the mark at the end has a rounding side. ok false: the approach turns the wrong way round it. */
+  rounding?: Rounding & { ok: boolean };
 }
 
-export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCfg, strategy: Strategy = LAYLINE_STRATEGY): LegSolution {
+export function solveLeg(
+  from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCfg, strategy: Strategy = LAYLINE_STRATEGY, rounding?: Rounding,
+): LegSolution {
+  const sol = solveLegInner(from, to, wind, tide, boat, strategy, rounding);
+  if (!rounding) return sol;
+  const last = sol.parts[sol.parts.length - 1];
+  return { ...sol, rounding: { ...rounding, ok: last ? roundsCorrectly(last.sail.cog, rounding) : true } };
+}
+
+function solveLegInner(
+  from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCfg, strategy: Strategy, rounding?: Rounding,
+): LegSolution {
   const d = sub(to, from);
   const dist = len(d);
   const bearing = bearingOf(d);
   const reach = solveReach(from, to, wind, tide, boat);
   const base = { from, to, dist, bearing, reach };
   if (dist < 1e-6) return { ...base, kind: 'reach', timeH: 0, parts: [] };
+  // With a rounding side, the last board must be the one that turns the right way round the mark.
+  const lastOk = (parts: Part[]) => !rounding || !parts.length || roundsCorrectly(parts[parts.length - 1].sail.cog, rounding);
 
   const opt = sailingAngles(boat, wind.kn);
   const absTwa = Math.abs(reach.twa);
@@ -270,11 +299,18 @@ export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCf
     if (sol && sol.a >= -1e-9 && sol.b >= -1e-9 && useLane) {
       // A lane board must be at least a minute, twice the tack cost and 5% of the leg.
       const minBoard = Math.max(60 / 3600, (2 * boat.tackPenaltySec) / 3600, 0.05 * (sol.a + sol.b));
-      const firstSide = sol.a >= sol.b ? 'starboard' : 'port';
-      const otherSide = firstSide === 'starboard' ? 'port' : 'starboard';
-      const parts = laneParts(from, to, pair, firstSide, strategy.margin, strategy.maxTacks, minBoard) ?? [];
-      const alt = laneParts(from, to, pair, otherSide, strategy.margin, strategy.maxTacks, minBoard) ?? [];
-      const altParts = alt.length > 1 && (alt[0].sail.tack !== parts[0]?.sail.tack) ? alt : undefined;
+      const firstSide: Side = sol.a >= sol.b ? 'starboard' : 'port';
+      const otherSide: Side = firstSide === 'starboard' ? 'port' : 'starboard';
+      const route = (side: Side, tacks: number) => laneParts(from, to, pair, side, strategy.margin, tacks, minBoard) ?? [];
+      let parts = route(firstSide, strategy.maxTacks);
+      let alt = route(otherSide, strategy.maxTacks);
+      if (!lastOk(parts) && lastOk(alt)) [parts, alt] = [alt, parts];
+      // Still the wrong final board (both routes end alike): give up a lane tack until the last board is right.
+      for (let k = strategy.maxTacks - 1; k >= 1 && !lastOk(parts); k--) {
+        const tryA = route(firstSide, k), tryB = route(otherSide, k);
+        if (lastOk(tryA)) { parts = tryA; alt = tryB; } else if (lastOk(tryB)) { parts = tryB; alt = tryA; }
+      }
+      const altParts = alt.length > 1 && (alt[0].sail.tack !== parts[0]?.sail.tack) && lastOk(alt) ? alt : undefined;
       const turns = Math.max(0, parts.length - 1);
       return {
         ...base, kind: mode === 'up' ? 'beat' : 'run', pair, laylines, tackBearings: tb, lane, parts, altParts,
@@ -297,8 +333,10 @@ export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCf
         }
         return out;
       };
-      const parts = build(legs);
-      const altParts = parts.length > 1 ? build([...legs].reverse()) : undefined;
+      let parts = build(legs);
+      let alt = parts.length > 1 ? build([...legs].reverse()) : undefined;
+      if (alt && !lastOk(parts) && lastOk(alt)) [parts, alt] = [alt, parts];
+      const altParts = alt && lastOk(alt) ? alt : undefined;
       const turns = Math.max(0, parts.length - 1);
       return {
         ...base, kind: mode === 'up' ? 'beat' : 'run', pair, laylines, tackBearings: tb, parts, altParts,

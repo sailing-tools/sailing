@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { AppState, useApp } from './store';
 import { JEANNEAU_410 } from './nav/polar';
-import { resolveWind, solveLeg, startLineInfo, BoatCfg, LegSolution, WindPair, StartLineInfo } from './nav/solve';
-import { Vec, mid } from './nav/vec';
+import { resolveWind, solveLeg, startLineInfo, Rounding, BoatCfg, LegSolution, WindPair, StartLineInfo } from './nav/solve';
+import { Vec, mid, sub, bearingOf } from './nav/vec';
 import land from './data/solent_land.json';
 
 // Local plane origin: Cowes, Isle of Wight.
@@ -21,7 +21,7 @@ export const LAND_PATH: string = (land as number[][][][])
   )
   .join('');
 
-export interface CoursePoint { pos: Vec; label: string; markId?: string }
+export interface CoursePoint { pos: Vec; label: string; markId?: string; rounding?: 'port' | 'starboard' }
 
 export interface CourseModel {
   wind: WindPair;
@@ -38,23 +38,30 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
   const boat: BoatCfg = { polar: s.customPolar ?? JEANNEAU_410, leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec, upTwa: s.upTwa };
   const points: CoursePoint[] = [];
   if (s.startLine) points.push({ pos: mid(s.startLine.committee, s.startLine.pin), label: 'Start' });
-  for (const m of s.marks) points.push({ pos: m.pos, label: m.name, markId: m.id });
+  for (const m of s.marks) points.push({ pos: m.pos, label: m.name, markId: m.id, rounding: m.rounding ?? 'port' });
   if (s.startLine && s.finishAtStart && s.marks.length) points.push({ pos: mid(s.startLine.committee, s.startLine.pin), label: 'Finish' });
+  // Rounding side of the point at index j, with the bearing of the leg after it.
+  const roundAt = (j: number): Rounding | undefined => {
+    const p = points[j], next = points[j + 1];
+    if (!p?.rounding || !next) return undefined;
+    return { side: p.rounding, nextBearing: bearingOf(sub(next.pos, p.pos)) };
+  };
   const legs: LegSolution[] = [];
-  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy));
+  for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
   const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let start: CourseModel['start'] = null;
   if (s.startLine) {
     const info = startLineInfo(s.startLine.committee, s.startLine.pin, wind.water);
     const first = s.marks[0];
-    const pinLeg = first ? solveLeg(s.startLine.pin, first.pos, wind.water, wind.tide, boat) : null;
-    const committeeLeg = first ? solveLeg(s.startLine.committee, first.pos, wind.water, wind.tide, boat) : null;
+    const r1 = roundAt(points.findIndex((p) => p.markId === first?.id));
+    const pinLeg = first ? solveLeg(s.startLine.pin, first.pos, wind.water, wind.tide, boat, undefined, r1) : null;
+    const committeeLeg = first ? solveLeg(s.startLine.committee, first.pos, wind.water, wind.tide, boat, undefined, r1) : null;
     start = { ...info, pinH: pinLeg?.timeH ?? NaN, committeeH: committeeLeg?.timeH ?? NaN, pinLeg, committeeLeg };
   }
   let probeLeg: LegSolution | null = null;
   if (s.probe && points.length > 1) {
-    const target = points[Math.min(s.selectedLeg + 1, points.length - 1)];
-    probeLeg = solveLeg(s.probe, target.pos, wind.water, wind.tide, boat, s.strategy);
+    const ti = Math.min(s.selectedLeg + 1, points.length - 1);
+    probeLeg = solveLeg(s.probe, points[ti].pos, wind.water, wind.tide, boat, s.strategy, roundAt(ti));
   }
   return { wind, boat, points, legs, totalH, start, probeLeg };
 }

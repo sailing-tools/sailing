@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useApp, setState, checkpoint, getState } from '../store';
+import { useApp, setState, checkpoint, getState, courseLink } from '../store';
 import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel } from '../course';
 import { Dial, Speed } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
@@ -70,18 +70,44 @@ export function CoursePanel() {
             <span className="buoy-dot" aria-hidden />
             <label className="sr" htmlFor={`mk-${m.id}`}>Mark name</label>
             <input id={`mk-${m.id}`} value={m.name} onFocus={checkpoint} onChange={(e) => setState({ marks: marks.map((x) => (x.id === m.id ? { ...x, name: e.target.value } : x)) })} />
+            <button type="button" className={`round-btn ${(m.rounding ?? 'port') === 'port' ? 'port-c' : 'stbd-c'}`} onClick={() => { checkpoint(); setState({ marks: marks.map((x) => (x.id === m.id ? { ...x, rounding: (x.rounding ?? 'port') === 'port' ? 'starboard' : 'port' } : x)) }); }} aria-label={`${m.name}: leave to ${(m.rounding ?? 'port')}. Tap to switch.`} title="Leave this mark to port or starboard">
+              {(m.rounding ?? 'port') === 'port' ? 'Port' : 'Stbd'}
+            </button>
             <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${m.name} earlier`}>↑</button>
             <button type="button" onClick={() => move(i, 1)} disabled={i === marks.length - 1} aria-label={`Move ${m.name} later`}>↓</button>
             <button type="button" className="danger" onClick={() => { checkpoint(); setState({ marks: marks.filter((x) => x.id !== m.id), selectedLeg: 0 }); }} aria-label={`Delete ${m.name}`}>×</button>
           </li>
         ))}
       </ol>
+      {marks.length > 0 && <p className="small muted">The Port / Stbd button sets which side you leave each mark on. On a beat or run the route picks the board that rounds the right way.</p>}
       {marks.length === 0 && <p className="muted">No marks yet. Use Add mark in the toolbar, then tap the chart.</p>}
       <label className="check">
         <input id="finish-at-start" type="checkbox" checked={finishAtStart} onChange={(e) => { checkpoint(); setState({ finishAtStart: e.target.checked }); }} />
         Finish back at the start line
       </label>
+      <ShareCourse />
     </section>
+  );
+}
+
+function ShareCourse() {
+  const [link, setLink] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+  const make = async () => {
+    const l = courseLink(getState());
+    setLink(l);
+    try { await navigator.clipboard.writeText(l); setCopied(true); } catch { setCopied(false); }
+  };
+  return (
+    <div className="share">
+      <button type="button" onClick={make}>Copy course link</button>
+      {link && (
+        <>
+          <span className="small muted">{copied ? ' Copied. Opening it loads this course, wind and tide.' : ' Copy the link below.'}</span>
+          {!copied && <input className="share-link" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Course link" />}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -277,6 +303,20 @@ function TwaSlider() {
 function SelectedLegNote({ c, i }: { c: CourseModel; i: number }) {
   const l = c.legs[i];
   if (!l) return null;
+  return (
+    <>
+      <LegNoteBody c={c} i={i} />
+      {l.rounding && !l.rounding.ok && (
+        <p className="note warn">
+          {c.points[i + 1].label} is left to {l.rounding.side}, but this approach turns the other way round it. Allow for sailing round the mark.
+        </p>
+      )}
+    </>
+  );
+}
+
+function LegNoteBody({ c, i }: { c: CourseModel; i: number }) {
+  const l = c.legs[i];
   if (l.kind === 'blocked') return <p className="note warn">Leg {i + 1}: {l.note ?? 'cannot be sailed in this tide'}.</p>;
   if (l.kind === 'beat' || l.kind === 'run') {
     const [a, b] = l.parts;
@@ -291,7 +331,8 @@ function SelectedLegNote({ c, i }: { c: CourseModel; i: number }) {
     return (
       <p className="note">
         Leg {i + 1}: sail {a.sail.tack} for {fmtTime(a.hours)}{b ? `, ${word} onto ${b.sail.tack} for ${fmtTime(b.hours)}` : ''}.
-        {b ? ` Or ${b.sail.tack} first for ${fmtTime(b.hours)}, then ${a.sail.tack} for ${fmtTime(a.hours)}.` : ''}
+        {b && l.altParts ? ` Or ${b.sail.tack} first for ${fmtTime(b.hours)}, then ${a.sail.tack} for ${fmtTime(a.hours)}.` : ''}
+        {b && !l.altParts && l.rounding ? ` Finishing on ${b.sail.tack} leaves ${c.points[i + 1].label} to ${l.rounding.side}.` : ''}
         {' '}Optimum {l.kind === 'beat' ? 'upwind' : 'downwind'} TWA {l.pair?.twa.toFixed(0)}° in {c.wind.water.kn.toFixed(1)} kn on the water.
       </p>
     );

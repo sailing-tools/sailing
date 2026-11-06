@@ -279,6 +279,7 @@ export function Chart() {
           const s = toS(m.pos);
           return (
             <g key={m.id} className="mark">
+              <RoundingArrow x={s.x} y={s.y} side={m.rounding ?? 'port'} />
               <circle cx={s.x} cy={s.y} r={7} className="buoy" />
               <text x={s.x + 11} y={s.y - 9} className="lbl mark-t">{m.name}</text>
               <circle cx={s.x} cy={s.y} r={18} className="hit-handle" onPointerDown={(e) => beginHandle(e, { kind: 'mark', id: m.id })} />
@@ -294,6 +295,20 @@ export function Chart() {
   );
 }
 
+/** Three-quarter arc round a mark, arrow showing the way round: anticlockwise for port, clockwise for starboard. */
+function RoundingArrow({ x, y, side }: { x: number; y: number; side: 'port' | 'starboard' }) {
+  const r = 13;
+  const port = side === 'port';
+  // Screen y points down, so sweep-flag 0 is anticlockwise on screen.
+  const a0 = port ? -0.25 * Math.PI : 1.25 * Math.PI, a1 = port ? -1.75 * Math.PI : 2.75 * Math.PI;
+  const P = (a: number) => `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
+  return (
+    <path d={`M${P(a0)} A${r},${r} 0 1 ${port ? 0 : 1} ${P(a1)}`} className={`rounding ${side}`} markerEnd={`url(#ah-round-${side})`}>
+      <title>Leave to {side}</title>
+    </path>
+  );
+}
+
 const clampScale = (s: number) => Math.min(6000, Math.max(20, s));
 
 function Defs() {
@@ -304,6 +319,11 @@ function Defs() {
       {(['water', 'ground', 'tide'] as const).map((t, i) => (
         <marker key={t} id={`ah-${t}`} viewBox="-20 -6 22 12" refX={0} refY={0} markerWidth={22} markerHeight={12} markerUnits="userSpaceOnUse" orient="auto">
           <path d={chev([1, 2, 3][i])} className={`ah ah-${t}`} />
+        </marker>
+      ))}
+      {(['port', 'starboard'] as const).map((sd) => (
+        <marker key={sd} id={`ah-round-${sd}`} viewBox="-8 -5 9 10" refX={0} refY={0} markerWidth={8} markerHeight={8} markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M-7,-3.5 L0,0 L-7,3.5" className={`ah-round ${sd}`} />
         </marker>
       ))}
       <marker id="ah-small" viewBox="-10 -5 11 10" refX={0} refY={0} markerWidth={10} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
