@@ -111,6 +111,14 @@ function fromLink(base: AppState): AppState {
 }
 
 let state: AppState = fromLink(load());
+
+// A course link opened while the app is already open in this tab only changes the hash, so load it then too.
+if (typeof window !== 'undefined') window.addEventListener('hashchange', () => {
+  if (!parseCourseHash(location.hash)) return;
+  checkpoint();
+  setState(fromLink(state));
+  window.dispatchEvent(new Event('course-loaded'));
+});
 const listeners = new Set<() => void>();
 const undoStack: string[] = [];
 let saveTimer: number | undefined;
