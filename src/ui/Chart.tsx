@@ -5,10 +5,10 @@ import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf, norm180, D2R } fr
 import { LegSolution, Sailing } from '../nav/solve';
 
 type Drag =
-  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null; tackIdx: number | null }
+  | { kind: 'pan'; start: Vec; view: AppState['view']; moved: boolean; legIdx: number | null; tackIdx: number | null; onLine: boolean }
   | { kind: 'mark'; id: string }
-  | { kind: 'committee' }
-  | { kind: 'pin' }
+  | { kind: 'committee'; start?: Vec; moved?: boolean }
+  | { kind: 'pin'; start?: Vec; moved?: boolean }
   | { kind: 'probe' }
   | { kind: 'pinch'; d0: number; c0: Vec; view: AppState['view'] };
 
@@ -27,6 +27,9 @@ export function Chart() {
   const vectorMin = useApp((s) => s.vectorMin);
   const selTack = useApp((s) => s.selectedTack);
   const course = useCourse();
+  const [lineCard, setLineCard] = React.useState(false);
+  React.useEffect(() => { if (selTack) setLineCard(false); }, [selTack]);
+  const toggleLineCard = () => setLineCard((v) => { if (!v) setState({ selectedTack: null }); return !v; });
 
   React.useLayoutEffect(() => {
     const el = svgRef.current!;
@@ -55,7 +58,7 @@ export function Chart() {
     checkpoint();
     svgRef.current!.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, local(e));
-    drag.current = d;
+    drag.current = d.kind === 'committee' || d.kind === 'pin' ? { ...d, start: local(e), moved: false } : d;
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -73,6 +76,7 @@ export function Chart() {
       kind: 'pan', start: p, view: getState().view, moved: false,
       legIdx: legEl ? Number(legEl.getAttribute('data-leg')) : tackEl ? Number(tackEl.getAttribute('data-tleg')) : null,
       tackIdx: tackEl ? Number(tackEl.getAttribute('data-tack')) : null,
+      onLine: !!(e.target as Element).closest?.('[data-startline]'),
     };
   };
 
@@ -98,6 +102,9 @@ export function Chart() {
       const pos = fromSv(p);
       setState((s) => ({ marks: s.marks.map((m) => (m.id === d.id ? { ...m, pos } : m)) }));
     } else if (d.kind === 'committee' || d.kind === 'pin') {
+      // A small wobble is a tap (show the line's length and bearing), not a drag.
+      if (!d.moved && d.start && Math.hypot(p.x - d.start.x, p.y - d.start.y) <= 5) return;
+      d.moved = true;
       const pos = fromSv(p);
       setState((s) => (s.startLine ? { startLine: { ...s.startLine, [d.kind]: pos } } : {}));
     } else if (d.kind === 'probe') {
@@ -110,6 +117,7 @@ export function Chart() {
     const d = drag.current;
     if (d?.kind === 'pinch') { drag.current = null; return; }
     drag.current = null;
+    if ((d?.kind === 'committee' || d?.kind === 'pin') && !d.moved) { if (getState().tool === 'select') toggleLineCard(); return; }
     if (!d || d.kind !== 'pan' || d.moved) return;
     // A tap
     const pos = fromS(local(e));
@@ -126,14 +134,17 @@ export function Chart() {
       }
     } else if (s.tool === 'probe') {
       setState({ probe: pos });
+    } else if (d.onLine) {
+      toggleLineCard();
     } else if (d.tackIdx !== null && d.legIdx !== null) {
       const cur = s.selectedTack;
       const same = cur && cur.leg === d.legIdx && cur.idx === d.tackIdx;
       setState({ selectedLeg: d.legIdx, selectedTack: same ? null : { leg: d.legIdx, idx: d.tackIdx } });
     } else if (d.legIdx !== null) {
       setState({ selectedLeg: d.legIdx, selectedTack: s.selectedLeg === d.legIdx ? s.selectedTack : null });
-    } else if (s.selectedTack) {
-      setState({ selectedTack: null });
+    } else {
+      if (s.selectedTack) setState({ selectedTack: null });
+      setLineCard(false);
     }
   };
 
@@ -302,10 +313,11 @@ export function Chart() {
             {label(probe, `${fmtTime(course.probeLeg.timeH)} to ${course.points[Math.min(selectedLeg + 1, course.points.length - 1)]?.label}`, 'lbl probe-t', -14)}
           </g>
         )}
+        {tool === 'select' && startLine && line(startLine.committee, startLine.pin, 'hit start-hit', { 'data-startline': '1' } as React.SVGProps<SVGLineElement>)}
         {tool === 'select' && <g className="tackhits">{tackHits()}</g>}
         {startLine && (
           <g className="startline">
-            {line(startLine.committee, startLine.pin, 'start-line')}
+            {line(startLine.committee, startLine.pin, `start-line${lineCard ? ' picked' : ''}`)}
             <rect x={toS(startLine.committee).x - 6} y={toS(startLine.committee).y - 6} width={12} height={12} className="committee" />
             <circle cx={toS(startLine.pin).x} cy={toS(startLine.pin).y} r={5.5} className="pin" />
             {label(startLine.committee, 'Committee', 'lbl handle-t', -12)}
@@ -330,6 +342,7 @@ export function Chart() {
       </svg>
       <WindRose course={course} />
       <Hint tool={tool} pending={!!pendingCommittee} />
+      {tool === 'select' && lineCard && startLine && <StartLineCard committee={startLine.committee} pin={startLine.pin} course={course} onClose={() => setLineCard(false)} />}
       {tool === 'select' && selTack && <TackCard course={course} leg={selTack.leg} idx={selTack.idx} />}
       <div className="attrib">{base === 'chart' ? 'Coastline: ONS boundaries, OGL. Not for navigation.' : 'Grid in nautical miles from Cowes'}</div>
     </div>
@@ -486,6 +499,28 @@ function WindRose({ course }: { course: CourseModel }) {
         <div><b>Wind</b> {fmtDeg(ground.from)} {ground.kn.toFixed(1)} kn</div>
         <div className="muted">on water {fmtDeg(water.from)} {water.kn.toFixed(1)} kn</div>
         <div className="tide-t"><b>Tide</b> {fmtDeg(bearingOf(t))} {tr.toFixed(1)} kn</div>
+      </div>
+    </div>
+  );
+}
+
+/** Length and bearing of the start line, shown when the line or either end is tapped. */
+function StartLineCard({ committee, pin, course, onClose }: { committee: Vec; pin: Vec; course: CourseModel; onClose: () => void }) {
+  const d = sub(committee, pin);
+  const m = len(d) * 1852;
+  const brg = bearingOf(d);
+  const info = course.start;
+  return (
+    <div className="tackcard linecard" role="status" aria-live="polite">
+      <div className="kv"><span>Start line length</span><b>{Math.round(m)} m · {(m / 185.2).toFixed(1)} cables</b></div>
+      <div className="kv"><span>Pin → committee</span><b>{fmtDeg(brg)}T</b></div>
+      <div className="kv"><span>Committee → pin</span><b>{fmtDeg((brg + 180) % 360)}T</b></div>
+      {info && (
+        <div className="kv"><span>Bias to the wind on the water</span><b>{Math.abs(info.bias).toFixed(0)}° {info.favoured === 'square' ? '(square)' : `to ${info.favoured}`}</b></div>
+      )}
+      <div className="tackcard-nav">
+        <span className="muted small" style={{ marginRight: 'auto' }}>Drag either end to move it.</span>
+        <button type="button" onClick={onClose} aria-label="Close">×</button>
       </div>
     </div>
   );
