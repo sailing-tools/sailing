@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { SOLENT_MARKS, SOLENT_MARKS_SOURCE } from '../data/solentMarks';
+import { findSolentMark, solentToMark, colourName, fmtLatLon } from '../marks';
 import { useApp, setState, checkpoint, getState, courseLink } from '../store';
 import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative, offBowText } from '../course';
 import { Dial, Speed, Slider } from './Dial';
@@ -31,6 +33,34 @@ export function ConditionsPanel() {
         Wind the boat sails in, after tide: <b>{fmtDeg(c.wind.water.from)} at {fmtKn(c.wind.water.kn)}</b>
       </p>
     </section>
+  );
+}
+
+/** Pick a mark from the SCRA Solent list by code or name and add it to the course. */
+function AddSolentMark() {
+  const marks = useApp((s) => s.marks);
+  const [q, setQ] = React.useState('');
+  const found = findSolentMark(q);
+  const add = () => {
+    if (!found) return;
+    checkpoint();
+    setState({ marks: [...marks, solentToMark(found)] });
+    setQ('');
+  };
+  return (
+    <div className="addmark">
+      <label htmlFor="solent-mark">Add a Solent mark</label>
+      <div className="row">
+        <input id="solent-mark" list="solent-mark-list" value={q} placeholder="Code or name, e.g. 3U or Gurnard" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+        <button type="button" onClick={add} disabled={!found}>Add</button>
+      </div>
+      <datalist id="solent-mark-list">
+        {SOLENT_MARKS.map((m) => <option key={m.code} value={`${m.code} ${m.name}`} />)}
+      </datalist>
+      <p className="small muted">
+        {found ? `${found.code} ${found.name} (${colourName(found.colour)}), ${fmtLatLon(found.lat, found.lon)}${found.note ? `. ${found.note}` : ''}` : `${SOLENT_MARKS.length} marks from the ${SOLENT_MARKS_SOURCE} list. You can also tap a mark on the chart.`}
+      </p>
+    </div>
   );
 }
 
@@ -73,6 +103,7 @@ export function CoursePanel() {
         <input id="finish-at-start" type="checkbox" checked={finishAtStart} onChange={(e) => { checkpoint(); setState({ finishAtStart: e.target.checked }); }} />
         Finish back at the start line
       </label>
+      <AddSolentMark />
       <ShareCourse />
     </section>
   );
@@ -542,6 +573,7 @@ export function DisplayPanel() {
         <label className="check"><input id="ly-both" type="checkbox" checked={layers.bothRoutes} onChange={() => tog('bothRoutes')} />Port and starboard routes</label>
         <label className="check"><input id="ly-start" type="checkbox" checked={layers.startOptions} onChange={() => tog('startOptions')} />Start options from each end</label>
         <label className="check"><input id="ly-tri" type="checkbox" checked={layers.triangles} onChange={() => tog('triangles')} />Vector triangles</label>
+        <label className="check"><input id="ly-rm" type="checkbox" checked={layers.racingMarks} onChange={() => tog('racingMarks')} />Solent racing marks</label>
         <label className="check"><input id="ly-tide" type="checkbox" checked={layers.tide} onChange={() => tog('tide')} />Tide arrows</label>
       </div>
       <Slider id="vecmin" label="Vector length" min={2} max={60} step={1} value={vectorMin} onChange={(v) => setState({ vectorMin: v })} format={(v) => `${v} min`} />
