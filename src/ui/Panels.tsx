@@ -106,6 +106,7 @@ const gainText = (g: number) => (!isFinite(g) ? '—' : Math.abs(g) < 2 ? 'even'
 export function StartPanel() {
   const c = useCourse();
   const marks = useApp((s) => s.marks);
+  const allowance = useApp((s) => s.startAllowanceSec ?? 30);
   const plan = c.startPlan;
   const st = c.start;
   if (!st) return null;
@@ -114,8 +115,11 @@ export function StartPanel() {
   const word = plan?.kind === 'run' ? 'gybe' : 'tack';
   const Word = word === 'gybe' ? 'Gybe' : 'Tack';
   const best = plan?.best;
+  const fastest = plan?.fastest;
   const twoBoard = plan && (plan.kind === 'beat' || plan.kind === 'run');
-  const rows = plan ? [...plan.routes].sort((a, b) => a.end.localeCompare(b.end) || (a.first === 'starboard' ? -1 : 1)) : [];
+  const rows = plan ? [...plan.routes].sort((a, b) => a.timeH - b.timeH) : [];
+  const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`);
+  const planName = (r: { plan: string; parts: unknown[] }) => (r.plan === 'laylines' ? 'Laylines' : `Lane, ${r.parts.length - 1} ${word}s`);
   return (
     <section className="panel" aria-labelledby="h-start">
       <h2 id="h-start">Start strategy <span className="muted">to {markName}</span></h2>
@@ -125,42 +129,61 @@ export function StartPanel() {
           {best.parts.length > 1 && best.tackBearing !== undefined
             ? <>, then {word} after {fmtTime(best.parts[0].hours)} when {markName} bears {fmtDeg(best.tackBearing)}T, {offBowText(best.tackBearing, best.parts[0].sail.heading)}.</>
             : <>, and you lay {markName}.</>}
+          {best.plan === 'lane' ? ` Then keep off the laylines: ${best.parts.length - 1} ${word}s in all.` : ''}
         </p>
       ) : null}
+      {best && fastest && twoBoard && best !== fastest && (
+        <p className="note">
+          This gives up {secs((best.timeH - fastest.timeH) * 3600)} on the quickest route ({endName(fastest.end).toLowerCase()}, {fastest.first} first, {planName(fastest).toLowerCase()})
+          {' '}to spend {pct(best.nearLayline)} of the beat near a layline instead of {pct(fastest.nearLayline)}
+          {best.downTide !== null && fastest.downTide !== null ? `, and ${pct(best.downTide)} down-tide instead of ${pct(fastest.downTide)}` : ''}.
+        </p>
+      )}
       {best && twoBoard && best.first === 'port' && (() => {
-        const stbd = plan!.routes.filter((r) => r.end === best.end && r.first === 'starboard').sort((a, b) => a.timeH - b.timeH)[0];
+        const stbd = plan!.routes.filter((r) => r.end === best.end && r.first === 'starboard').sort((a, b) => a.risk - b.risk || a.timeH - b.timeH)[0];
         return (
           <p className="note">
             On port you give way to every boat on starboard. If the fleet is on starboard, start on starboard and tack when you're clear
-            {stbd ? `. Going all the way on starboard first costs ${secs((stbd.timeH - best.timeH) * 3600)}.` : '.'}
+            {stbd ? `. Staying on starboard first costs ${secs((stbd.timeH - best.timeH) * 3600)}.` : '.'}
           </p>
         );
       })()}
       {!(best && twoBoard) && plan ? (
         <p className="note">Leg 1 is a {plan.kind}, so there is no tack to choose. The favoured end is still shown below.</p>
       ) : null}
+      {twoBoard && (
+        <div className="speed">
+          <label htmlFor="start-allow">Give up to</label>
+          <input id="start-allow" type="range" min={0} max={180} step={5} value={allowance} onPointerDown={checkpoint} onChange={(e) => setState({ startAllowanceSec: Number(e.target.value) })} />
+          <output htmlFor="start-allow">{allowance} s</output>
+        </div>
+      )}
+      {twoBoard && <p className="small muted">How much time you'll give up on the quickest route to stay off the laylines and up-tide. 0 means fastest on paper.</p>}
       <div className="gains">
         <div className="kv"><span>Line bias to the wind on the water</span><b>{st.favoured === 'square' ? 'square' : `${Math.abs(st.bias).toFixed(0)}° to ${st.favoured}, ${Math.round(st.advantageM)} m upwind`}</b></div>
         {plan && <>
           <div className="kv"><span>Wind alone favours</span><b>{gainText(plan.gainS.wind)}</b></div>
           <div className="kv"><span>Tide on top of that</span><b>{gainText(plan.gainS.tide)}</b></div>
-          <div className="kv total"><span>Overall to {markName}</span><b>{plan.favoured === 'even' ? 'even' : `${plan.favoured} end by ${secs(plan.gainS.total)}`}</b></div>
+          <div className="kv total"><span>Fastest end to {markName}</span><b>{plan.favoured === 'even' ? 'even' : `${plan.favoured} by ${secs(plan.gainS.total)}`}</b></div>
+          {plan.upTideSide && <div className="kv"><span>Up-tide side</span><b className={plan.upTideSide === 'starboard' ? 'stbd-c' : 'port-c'}>the {plan.upTideSide} tack takes you there</b></div>}
         </>}
         <div className="kv"><span>Line length</span><b>{Math.round(st.lengthM)} m</b></div>
       </div>
       {twoBoard && rows.length > 0 && (
         <div className="tablewrap">
           <table className="opts" aria-label={`Start options to ${markName}`}>
-            <thead><tr><th>From</th><th>First</th><th>CTW</th><th>{Word} at</th><th>Mark bears</th><th>To mark</th></tr></thead>
+            <thead><tr><th>From</th><th>First</th><th>Plan</th><th>Time</th><th>Near layline</th><th>Down-tide</th><th>{Word} at</th><th>Mark bears</th></tr></thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={i} className={r === best ? 'best' : r.roundsOk ? '' : 'wrong'}>
                   <td>{endName(r.end)}</td>
                   <td className={r.first === 'starboard' ? 'stbd-c' : 'port-c'}>{side(r.first)}</td>
-                  <td>{fmtDeg(r.parts[0].sail.heading)}</td>
+                  <td>{planName(r)}</td>
+                  <td>{fmtTime(r.timeH)}{r.roundsOk ? '' : ' *'}{fastest && r !== fastest ? ` (+${Math.round((r.timeH - fastest.timeH) * 3600)} s)` : ''}</td>
+                  <td>{pct(r.nearLayline)}</td>
+                  <td>{pct(r.downTide)}</td>
                   <td>{r.parts.length > 1 ? fmtTime(r.parts[0].hours) : 'lays it'}</td>
                   <td>{r.tackBearing !== undefined ? `${fmtDeg(r.tackBearing)}T · ${offBow(r.tackBearing, r.parts[0].sail.heading)}` : '—'}</td>
-                  <td>{fmtTime(r.timeH)}{r.roundsOk ? '' : ' *'}</td>
                 </tr>
               ))}
             </tbody>
@@ -168,9 +191,10 @@ export function StartPanel() {
         </div>
       )}
       <p className="small muted">
-        Wind alone is the same course sailed in slack water, so it shows what the line bias is worth. Tide is the rest of the difference.
+        Near layline: share of the beat within {Math.round((plan?.options.margin ?? 0.2) * 100)}% of a layline (your Tacking margin), not counting the last quarter, where you have to be on one.
+        Down-tide: share of the beat on the side of the line to the mark that the stream sets you towards. The pick is the route with least of both within your allowance of the quickest.
+        Wind alone is the course sailed in slack water, so it shows what the line bias is worth; tide is the rest.
         {twoBoard && r1 ? ` * arrives on the wrong board to leave ${markName} to ${r1}, so it carries one extra ${word}.` : ''}
-        {' '}Close calls go to the favoured end, then to starboard, which has right of way off the line. Uses two-board layline routes.
       </p>
     </section>
   );

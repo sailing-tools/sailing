@@ -190,7 +190,10 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
 .rose-text .tide-t { color: var(--tide); }
 
 .tack-hit { fill: transparent; cursor: pointer; }
-.board-hit { cursor: pointer; }
+.board-hit { stroke: transparent; stroke-width: 30; stroke-linecap: round; cursor: pointer; }
+/* Drawn lines and labels never take taps; the hit layers above them do. */
+.chart-svg .track, .chart-svg .layline, .chart-svg .start-opt, .chart-svg .lbl, .chart-svg .rhumb, .chart-svg .tidefield,
+.chart-svg .v-water, .chart-svg .v-tide, .chart-svg .v-ground, .chart-svg .tackdot, .chart-svg .tack-ring, .chart-svg .rounding { pointer-events: none; }
 .track.picked { stroke-width: 4 !important; opacity: 1 !important; }
 .tack-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 .pickable tbody tr { cursor: pointer; }
