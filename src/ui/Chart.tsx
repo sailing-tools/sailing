@@ -230,21 +230,36 @@ export function Chart() {
         ))}
         {layers.triangles && leg.parts[0] && triangle(leg.from, leg.parts[0].sail, course.wind.tide, 'tri' + i, !sel)}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="hit" data-leg={i} />
-        {(leg.kind === 'beat' || leg.kind === 'run') && leg.parts.map((pt, j) => {
-          const S1 = toS(pt.start), S2 = toS(pt.end);
-          return (
-            <g key={'hit' + j} data-tack={j} data-tleg={i} className="tackhit">
-              <line x1={S1.x} y1={S1.y} x2={S2.x} y2={S2.y} className="hit board-hit" />
-              {sel && j < leg.parts.length - 1 && <circle cx={S2.x} cy={S2.y} r={20} className="tack-hit" />}
-            </g>
-          );
-        })}
         <g transform={`translate(${m.x},${m.y})`} data-leg={i} className="legno">
           <circle r={9} />
           <text dy="0.35em">{i + 1}</text>
         </g>
       </g>
     );
+  };
+
+  // Tap targets for boards and tack points, drawn above every route line so nothing else catches the tap.
+  // The selected leg goes last, on top.
+  const tackHits = () => {
+    const order = course.legs.map((_, i) => i).filter((i) => i !== selectedLeg);
+    if (course.legs[selectedLeg]) order.push(selectedLeg);
+    return order.map((i) => {
+      const leg = course.legs[i];
+      if (leg.kind !== 'beat' && leg.kind !== 'run') return null;
+      return (
+        <g key={'th' + i}>
+          {leg.parts.map((pt, j) => {
+            const S1 = toS(pt.start), S2 = toS(pt.end);
+            return <line key={'b' + j} x1={S1.x} y1={S1.y} x2={S2.x} y2={S2.y} className="board-hit tackhit" data-tack={j} data-tleg={i} />;
+          })}
+          {/* Tack points sit above the boards: tapping one picks the board that ends there. */}
+          {leg.parts.slice(0, -1).map((pt, j) => {
+            const S2 = toS(pt.end);
+            return <circle key={'t' + j} cx={S2.x} cy={S2.y} r={24} className="tack-hit tackhit" data-tack={j} data-tleg={i} />;
+          })}
+        </g>
+      );
+    });
   };
 
   const label = (p: Vec, text: string, cls: string, dy = 0) => {
@@ -286,6 +301,7 @@ export function Chart() {
             {label(probe, `${fmtTime(course.probeLeg.timeH)} to ${course.points[Math.min(selectedLeg + 1, course.points.length - 1)]?.label}`, 'lbl probe-t', -14)}
           </g>
         )}
+        {tool === 'select' && <g className="tackhits">{tackHits()}</g>}
         {startLine && (
           <g className="startline">
             {line(startLine.committee, startLine.pin, 'start-line')}
