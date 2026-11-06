@@ -179,6 +179,7 @@ export function TackingPanel() {
   return (
     <section className="panel" aria-labelledby="h-tack">
       <h2 id="h-tack">Tacking <span className="muted">{leg ? `Leg ${selected + 1}` : ''}</span></h2>
+      <TwaSlider />
       <div className="seg seg-full" role="radiogroup" aria-label="Upwind and downwind strategy">
         {([['laylines', 'Tack on the laylines'], ['lane', 'Stay off the laylines']] as const).map(([m, t]) => (
           <button key={m} type="button" role="radio" aria-checked={strategy.mode === m} className={strategy.mode === m ? 'on' : ''} onClick={() => { checkpoint(); set({ mode: m }); }}>{t}</button>
@@ -248,6 +249,28 @@ export function TackingPanel() {
         <p className="muted">{leg ? `Leg ${selected + 1} is a ${leg.kind === 'reach' ? 'reach, laid on one board' : 'blocked leg'}. Pick a beat or a run to see tack bearings.` : 'Add marks to see tack bearings.'}</p>
       )}
     </section>
+  );
+}
+
+function TwaSlider() {
+  const c = useCourse();
+  const upTwa = useApp((s) => s.upTwa);
+  const best = optimalAngles(c.boat.polar, c.wind.water.kn).up;
+  const value = upTwa ?? Math.round(best.twa);
+  return (
+    <div className="twa-set">
+      <div className="speed">
+        <label htmlFor="up-twa">Upwind angle</label>
+        <input id="up-twa" type="range" min={30} max={60} step={1} value={value} onPointerDown={checkpoint} onChange={(e) => setState({ upTwa: Number(e.target.value) })} />
+        <output htmlFor="up-twa">{value}° TWA</output>
+      </div>
+      <p className="small muted">
+        {upTwa == null
+          ? `From the polar: best VMG is at ${best.twa.toFixed(0)}° in ${c.wind.water.kn.toFixed(1)} kn on the water. Slide to set your own.`
+          : `Your angle, tacking through about ${2 * upTwa}°. The polar's best is ${best.twa.toFixed(0)}°. Speed comes from the polar at your angle.`}
+        {upTwa != null && <> <button type="button" className="linkish" onClick={() => { checkpoint(); setState({ upTwa: null }); }}>Use the polar</button></>}
+      </p>
+    </div>
   );
 }
 
@@ -372,18 +395,6 @@ export function BoatPanel() {
         <input id="leeway" type="range" min={0} max={8} step={0.5} value={leeway} onPointerDown={checkpoint} onChange={(e) => setState({ leewayDeg: Number(e.target.value) })} />
         <output htmlFor="leeway">{leeway.toFixed(1)}°</output>
       </div>
-      <label className="check">
-        <input id="own-twa" type="checkbox" checked={upTwa != null} onChange={(e) => { checkpoint(); setState({ upTwa: e.target.checked ? Math.round(best.up.twa) : null }); }} />
-        Set my own upwind angle
-      </label>
-      {upTwa != null && (
-        <div className="speed">
-          <label htmlFor="up-twa">Upwind TWA</label>
-          <input id="up-twa" type="range" min={30} max={60} step={1} value={upTwa} onPointerDown={checkpoint} onChange={(e) => setState({ upTwa: Number(e.target.value) })} />
-          <output htmlFor="up-twa">{upTwa}°</output>
-        </div>
-      )}
-      {upTwa != null && <p className="small muted">Degrees off the wind on the water, each side, so tacking through about {2 * upTwa}°. Boat speed comes from the polar at this angle.</p>}
       <div className="speed">
         <label htmlFor="penalty">Tack cost</label>
         <input id="penalty" type="range" min={0} max={60} step={1} value={penalty} onPointerDown={checkpoint} onChange={(e) => setState({ tackPenaltySec: Number(e.target.value) })} />
