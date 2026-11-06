@@ -3,6 +3,7 @@ import { AppState, useApp } from './store';
 import { JEANNEAU_410 } from './nav/polar';
 import { resolveWind, solveLeg, startLineInfo, Rounding, BoatCfg, LegSolution, WindPair, StartLineInfo } from './nav/solve';
 import { Vec, mid, sub, bearingOf } from './nav/vec';
+import { startStrategy, StartStrategy } from './nav/start';
 import land from './data/solent_land.json';
 
 // Local plane origin: Cowes, Isle of Wight.
@@ -31,6 +32,8 @@ export interface CourseModel {
   totalH: number;
   start: (StartLineInfo & { pinH: number; committeeH: number; pinLeg: LegSolution | null; committeeLeg: LegSolution | null }) | null;
   probeLeg: LegSolution | null;
+  /** Start line strategy to the first mark (beats and runs). */
+  startPlan: StartStrategy | null;
 }
 
 export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'upTwa' | 'strategy' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
@@ -50,6 +53,7 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
   for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
   const totalH = legs.reduce((t, l) => t + l.timeH, 0);
   let start: CourseModel['start'] = null;
+  let startPlan: StartStrategy | null = null;
   if (s.startLine) {
     const info = startLineInfo(s.startLine.committee, s.startLine.pin, wind.water);
     const first = s.marks[0];
@@ -57,13 +61,14 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
     const pinLeg = first ? solveLeg(s.startLine.pin, first.pos, wind.water, wind.tide, boat, undefined, r1) : null;
     const committeeLeg = first ? solveLeg(s.startLine.committee, first.pos, wind.water, wind.tide, boat, undefined, r1) : null;
     start = { ...info, pinH: pinLeg?.timeH ?? NaN, committeeH: committeeLeg?.timeH ?? NaN, pinLeg, committeeLeg };
+    if (first) startPlan = startStrategy(s.startLine.committee, s.startLine.pin, first.pos, wind.water, wind.tide, boat, r1);
   }
   let probeLeg: LegSolution | null = null;
   if (s.probe && points.length > 1) {
     const ti = Math.min(s.selectedLeg + 1, points.length - 1);
     probeLeg = solveLeg(s.probe, points[ti].pos, wind.water, wind.tide, boat, s.strategy, roundAt(ti));
   }
-  return { wind, boat, points, legs, totalH, start, probeLeg };
+  return { wind, boat, points, legs, totalH, start, probeLeg, startPlan };
 }
 
 export function useCourse(): CourseModel {

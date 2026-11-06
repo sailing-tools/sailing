@@ -94,6 +94,15 @@ button, input, textarea { font: inherit; color: inherit; }
 .track.alt { stroke-dasharray: 6 4; opacity: 0.55; }
 .leg.sel .track.alt { opacity: 0.8; stroke-width: 1.8; }
 .track.opt { stroke-width: 1.2; stroke-dasharray: 2 3; opacity: 0.75; }
+.track.opt.best { stroke-width: 2.6; stroke-dasharray: none; opacity: 0.95; }
+.so-wrong .track.opt { opacity: 0.35; }
+.best-t { fill: var(--ink); font-weight: 600; }
+.verdict { margin: 0; font-size: 14px; line-height: 1.45; }
+.verdict .stbd-c { color: var(--stbd); }
+.verdict .port-c { color: var(--port); }
+.gains { display: grid; gap: 4px; }
+.gains .total { border-top: 1px solid var(--line); padding-top: 4px; }
+.opts tr.wrong td { color: var(--muted); }
 .tackdot.starboard { fill: var(--stbd); }
 .tackdot.port { fill: var(--port); }
 .tackpt-t { fill: var(--ink); font-size: 10px; text-anchor: middle; }

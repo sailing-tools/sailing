@@ -303,3 +303,40 @@ describe('tack narrative', () => {
     expect(offBowText(350, 0)).toBe('10° off the port bow');
   });
 });
+
+import { startStrategy } from '../src/nav/start';
+describe('start strategy', () => {
+  const w = { from: 0, kn: 12 };
+  const mark = { x: 0, y: 2 };
+  const square = { committee: { x: 0.1, y: 0 }, pin: { x: -0.1, y: 0 } };
+  it('square line in slack water is even, both boards shown from each end', () => {
+    const s = startStrategy(square.committee, square.pin, mark, w, { x: 0, y: 0 }, boat);
+    expect(Math.abs(s.gainS.total)).toBeLessThan(2);
+    expect(s.favoured).toBe('even');
+    expect(s.routes.length).toBe(4);
+    expect(s.best!.first).toBe('starboard'); // tie goes to right of way
+  });
+  it('a line biased to the pin gives the wind gain to the pin', () => {
+    const s = startStrategy({ x: 0.1, y: 0 }, { x: -0.1, y: 0.03 }, mark, w, { x: 0, y: 0 }, boat);
+    expect(s.gainS.wind).toBeGreaterThan(5);
+    close(s.gainS.tide, 0, 1e-6);
+    expect(s.favoured).toBe('pin');
+    expect(s.best!.end).toBe('pin');
+  });
+  it('splits wind and tide, and tide can outweigh the bias', () => {
+    // Pin slightly upwind, but a strong stream setting west makes the committee (east) end pay.
+    const s = startStrategy({ x: 0.3, y: 0 }, { x: -0.3, y: 0.01 }, { x: -0.6, y: 1.5 }, w, fromBearing(270, 2.5), boat);
+    close(s.gainS.wind + s.gainS.tide, s.gainS.total, 1e-6);
+    expect(s.gainS.wind).toBeGreaterThan(0);
+    expect(Math.sign(s.gainS.tide)).not.toBe(0);
+  });
+  it('charges an extra tack for arriving on the wrong board', () => {
+    const pen = { ...boat, tackPenaltySec: 20 };
+    const s = startStrategy(square.committee, square.pin, mark, w, { x: 0, y: 0 }, pen, { side: 'port', nextBearing: 180 });
+    const fromPin = s.routes.filter((r) => r.end === 'pin');
+    const good = fromPin.find((r) => r.roundsOk)!, bad = fromPin.find((r) => !r.roundsOk)!;
+    expect(good.parts[good.parts.length - 1].sail.tack).toBe('starboard');
+    close((bad.timeH - good.timeH) * 3600, 20, 1);
+    expect(s.best!.roundsOk).toBe(true);
+  });
+});

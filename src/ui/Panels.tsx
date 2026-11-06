@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useApp, setState, checkpoint, getState, courseLink } from '../store';
-import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative } from '../course';
+import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative, offBowText } from '../course';
 import { Dial, Speed } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
 import { Vec, len, add, mul, sub, bearingOf, norm180 } from '../nav/vec';
@@ -51,19 +51,7 @@ export function CoursePanel() {
   return (
     <section className="panel" aria-labelledby="h-course">
       <h2 id="h-course">Course</h2>
-      {startLine && st ? (
-        <div className="startinfo">
-          <div className="kv"><span>Line length</span><b>{Math.round(st.lengthM)} m</b></div>
-          <div className="kv"><span>Bias</span><b>{st.favoured === 'square' ? 'Square' : `${Math.abs(st.bias).toFixed(0)}° to ${st.favoured}`}</b></div>
-          {st.favoured !== 'square' && <div className="kv"><span>Upwind advantage</span><b>{Math.round(st.advantageM)} m at {st.favoured}</b></div>}
-          {isFinite(st.pinH) && isFinite(st.committeeH) && (
-            <div className="kv"><span>To {marks[0]?.name}</span><b>{st.pinH < st.committeeH ? 'Pin' : 'Committee'} end {Math.abs(Math.round((st.pinH - st.committeeH) * 3600))} s faster</b></div>
-          )}
-        </div>
-      ) : (
-        <p className="muted">No start line yet. Use Start line in the toolbar.</p>
-      )}
-      {st && <StartOptions st={st} markName={marks[0]?.name ?? 'mark 1'} />}
+      {!startLine && <p className="muted">No start line yet. Use Start line in the toolbar.</p>}
       <ol className="marklist">
         {marks.map((m, i) => (
           <li key={m.id}>
@@ -111,38 +99,80 @@ function ShareCourse() {
   );
 }
 
-function StartOptions({ st, markName }: { st: NonNullable<CourseModel['start']>; markName: string }) {
-  const rows: { end: string; first: string; tack: string; cog: number; tackAt: number; second: string; cog2: number; total: number }[] = [];
-  for (const [end, l] of [['Committee', st.committeeLeg], ['Pin', st.pinLeg]] as const) {
-    if (!l || (l.kind !== 'beat' && l.kind !== 'run')) continue;
-    for (const parts of [l.parts, l.altParts ?? []]) {
-      if (!parts.length) continue;
-      const [a, b] = parts;
-      rows.push({ end, first: a.sail.tack, tack: '', cog: a.sail.cog, tackAt: b ? a.hours : NaN, second: b?.sail.tack ?? '', cog2: b?.sail.cog ?? NaN, total: l.timeH });
-    }
-  }
-  if (!rows.length) return null;
-  rows.sort((x, y) => x.end.localeCompare(y.end) || (x.first === 'starboard' ? -1 : 1));
-  const best = Math.min(...rows.map((r) => r.total));
-  const word = st.pinLeg?.kind === 'run' ? 'Gybe' : 'Tack';
+const endName = (e: string) => (e === 'pin' ? 'Pin' : 'Committee');
+const secs = (x: number) => `${Math.abs(Math.round(x))} s`;
+const gainText = (g: number) => (!isFinite(g) ? '—' : Math.abs(g) < 2 ? 'even' : `${g > 0 ? 'pin' : 'committee'} by ${secs(g)}`);
+
+export function StartPanel() {
+  const c = useCourse();
+  const marks = useApp((s) => s.marks);
+  const plan = c.startPlan;
+  const st = c.start;
+  if (!st) return null;
+  const markName = marks[0]?.name ?? 'the first mark';
+  const r1 = c.points[1]?.rounding;
+  const word = plan?.kind === 'run' ? 'gybe' : 'tack';
+  const Word = word === 'gybe' ? 'Gybe' : 'Tack';
+  const best = plan?.best;
+  const twoBoard = plan && (plan.kind === 'beat' || plan.kind === 'run');
+  const rows = plan ? [...plan.routes].sort((a, b) => a.end.localeCompare(b.end) || (a.first === 'starboard' ? -1 : 1)) : [];
   return (
-    <div className="tablewrap">
-      <table className="opts" aria-label={`Start options to ${markName}`}>
-        <thead><tr><th>From</th><th>First board</th><th>CoG</th><th>{word} at</th><th>{word} when mark bears</th><th>To {markName}</th></tr></thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className={Math.abs(r.total - best) < 1 / 3600 ? 'best' : ''}>
-              <td>{r.end}</td>
-              <td className={r.first === 'starboard' ? 'stbd-c' : 'port-c'}>{r.first === 'starboard' ? 'Stbd' : 'Port'}</td>
-              <td>{fmtDeg(r.cog)}</td>
-              <td>{isFinite(r.tackAt) ? fmtTime(r.tackAt) : 'lays it'}</td>
-              <td>{isFinite(r.cog2) ? fmtDeg(r.cog2) : '—'}</td>
-              <td>{fmtTime(r.total)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <section className="panel" aria-labelledby="h-start">
+      <h2 id="h-start">Start strategy <span className="muted">to {markName}</span></h2>
+      {best && twoBoard ? (
+        <p className="verdict">
+          Start at the <b>{endName(best.end).toLowerCase()} end</b> on <b className={best.first === 'starboard' ? 'stbd-c' : 'port-c'}>{best.first}</b>
+          {best.parts.length > 1 && best.tackBearing !== undefined
+            ? <>, then {word} after {fmtTime(best.parts[0].hours)} when {markName} bears {fmtDeg(best.tackBearing)}T, {offBowText(best.tackBearing, best.parts[0].sail.heading)}.</>
+            : <>, and you lay {markName}.</>}
+        </p>
+      ) : null}
+      {best && twoBoard && best.first === 'port' && (() => {
+        const stbd = plan!.routes.filter((r) => r.end === best.end && r.first === 'starboard').sort((a, b) => a.timeH - b.timeH)[0];
+        return (
+          <p className="note">
+            On port you give way to every boat on starboard. If the fleet is on starboard, start on starboard and tack when you're clear
+            {stbd ? `. Going all the way on starboard first costs ${secs((stbd.timeH - best.timeH) * 3600)}.` : '.'}
+          </p>
+        );
+      })()}
+      {!(best && twoBoard) && plan ? (
+        <p className="note">Leg 1 is a {plan.kind}, so there is no tack to choose. The favoured end is still shown below.</p>
+      ) : null}
+      <div className="gains">
+        <div className="kv"><span>Line bias to the wind on the water</span><b>{st.favoured === 'square' ? 'square' : `${Math.abs(st.bias).toFixed(0)}° to ${st.favoured}, ${Math.round(st.advantageM)} m upwind`}</b></div>
+        {plan && <>
+          <div className="kv"><span>Wind alone favours</span><b>{gainText(plan.gainS.wind)}</b></div>
+          <div className="kv"><span>Tide on top of that</span><b>{gainText(plan.gainS.tide)}</b></div>
+          <div className="kv total"><span>Overall to {markName}</span><b>{plan.favoured === 'even' ? 'even' : `${plan.favoured} end by ${secs(plan.gainS.total)}`}</b></div>
+        </>}
+        <div className="kv"><span>Line length</span><b>{Math.round(st.lengthM)} m</b></div>
+      </div>
+      {twoBoard && rows.length > 0 && (
+        <div className="tablewrap">
+          <table className="opts" aria-label={`Start options to ${markName}`}>
+            <thead><tr><th>From</th><th>First</th><th>CTW</th><th>{Word} at</th><th>Mark bears</th><th>To mark</th></tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className={r === best ? 'best' : r.roundsOk ? '' : 'wrong'}>
+                  <td>{endName(r.end)}</td>
+                  <td className={r.first === 'starboard' ? 'stbd-c' : 'port-c'}>{side(r.first)}</td>
+                  <td>{fmtDeg(r.parts[0].sail.heading)}</td>
+                  <td>{r.parts.length > 1 ? fmtTime(r.parts[0].hours) : 'lays it'}</td>
+                  <td>{r.tackBearing !== undefined ? `${fmtDeg(r.tackBearing)}T · ${offBow(r.tackBearing, r.parts[0].sail.heading)}` : '—'}</td>
+                  <td>{fmtTime(r.timeH)}{r.roundsOk ? '' : ' *'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="small muted">
+        Wind alone is the same course sailed in slack water, so it shows what the line bias is worth. Tide is the rest of the difference.
+        {twoBoard && r1 ? ` * arrives on the wrong board to leave ${markName} to ${r1}, so it carries one extra ${word}.` : ''}
+        {' '}Close calls go to the favoured end, then to starboard, which has right of way off the line. Uses two-board layline routes.
+      </p>
+    </section>
   );
 }
 

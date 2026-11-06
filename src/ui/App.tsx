@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useApp, setState, getState, undo, resetAll, Tool } from '../store';
 import { Chart } from './Chart';
 import { computeCourse } from '../course';
-import { ConditionsPanel, CoursePanel, LegsPanel, TackingPanel, VectorPanel, BoatPanel, DisplayPanel } from './Panels';
+import { ConditionsPanel, CoursePanel, StartPanel, LegsPanel, TackingPanel, VectorPanel, BoatPanel, DisplayPanel } from './Panels';
 
 function fitView() {
   const s = getState();
@@ -78,6 +78,7 @@ export function App() {
       </main>
       <aside className="side">
         <ConditionsPanel />
+        <StartPanel />
         <LegsPanel />
         <TackingPanel />
         <VectorPanel />
