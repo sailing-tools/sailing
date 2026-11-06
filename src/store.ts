@@ -11,6 +11,7 @@ export interface AppState {
   cond: Conditions;
   leewayDeg: number;
   tackPenaltySec: number;
+  upTwa: number | null;
   strategy: Strategy;
   customPolar: Polar | null;
   startLine: { committee: Vec; pin: Vec } | null;
@@ -31,6 +32,7 @@ export const initialState: AppState = {
   cond: { windFrom: 250, windKn: 12, windRef: 'ground', tideTo: 80, tideKn: 1.8 },
   leewayDeg: 0,
   tackPenaltySec: 15,
+  upTwa: null,
   strategy: { mode: 'laylines', margin: 0.25, maxTacks: 4 },
   customPolar: null,
   startLine: { committee: { x: 3.16, y: 1.61 }, pin: { x: 3.22, y: 1.38 } },
@@ -51,7 +53,7 @@ export const initialState: AppState = {
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'tackPenaltySec', 'strategy', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
 ];
 
 function load(): AppState {
@@ -87,7 +89,7 @@ export function setState(patch: Partial<AppState> | ((s: AppState) => Partial<Ap
   save();
 }
 
-const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'strategy'];
+const snapKeys: (keyof AppState)[] = ['cond', 'startLine', 'marks', 'finishAtStart', 'leewayDeg', 'tackPenaltySec', 'upTwa', 'strategy'];
 /** Call before a user edit that should be undoable. */
 export function checkpoint() {
   const o: Partial<AppState> = {};

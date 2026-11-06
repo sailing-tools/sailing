@@ -15,6 +15,17 @@ export interface BoatCfg {
   polar: Polar;
   leewayDeg: number;
   tackPenaltySec: number;
+  /** Your own upwind TWA (degrees off the true wind on the water). Null or absent uses the polar's best VMG angle. */
+  upTwa?: number | null;
+}
+
+/** Upwind and downwind sailing angles: the polar's VMG optimum, unless the boat sets its own upwind TWA. */
+export function sailingAngles(boat: BoatCfg, tws: number) {
+  const opt = optimalAngles(boat.polar, tws);
+  if (boat.upTwa == null) return opt;
+  const twa = Math.min(70, Math.max(25, boat.upTwa));
+  const stw = polarSpeed(boat.polar, twa, tws);
+  return { ...opt, up: { twa, stw, vmg: stw * Math.cos(twa * D2R) } };
 }
 
 export interface Wind { from: number; kn: number }
@@ -111,7 +122,7 @@ export interface TackPair { mode: 'up' | 'down'; twa: number; starboard: Sailing
 
 /** Both tacks (or gybes) at the optimum VMG angle in the water wind. */
 export function tackPair(wind: Wind, tide: Vec, boat: BoatCfg, mode: 'up' | 'down'): TackPair {
-  const opt = optimalAngles(boat.polar, wind.kn)[mode];
+  const opt = sailingAngles(boat, wind.kn)[mode];
   return {
     mode,
     twa: opt.twa,
@@ -236,7 +247,7 @@ export function solveLeg(from: Vec, to: Vec, wind: Wind, tide: Vec, boat: BoatCf
   const base = { from, to, dist, bearing, reach };
   if (dist < 1e-6) return { ...base, kind: 'reach', timeH: 0, parts: [] };
 
-  const opt = optimalAngles(boat.polar, wind.kn);
+  const opt = sailingAngles(boat, wind.kn);
   const absTwa = Math.abs(reach.twa);
   let mode: 'up' | 'down' | null = null;
   if (!reach.feasible || absTwa < opt.up.twa) {

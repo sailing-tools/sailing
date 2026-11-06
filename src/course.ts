@@ -33,9 +33,9 @@ export interface CourseModel {
   probeLeg: LegSolution | null;
 }
 
-export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'strategy' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
+export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPenaltySec' | 'upTwa' | 'strategy' | 'customPolar' | 'startLine' | 'marks' | 'finishAtStart' | 'probe' | 'selectedLeg'>): CourseModel {
   const wind = resolveWind(s.cond);
-  const boat: BoatCfg = { polar: s.customPolar ?? JEANNEAU_410, leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec };
+  const boat: BoatCfg = { polar: s.customPolar ?? JEANNEAU_410, leewayDeg: s.leewayDeg, tackPenaltySec: s.tackPenaltySec, upTwa: s.upTwa };
   const points: CoursePoint[] = [];
   if (s.startLine) points.push({ pos: mid(s.startLine.committee, s.startLine.pin), label: 'Start' });
   for (const m of s.marks) points.push({ pos: m.pos, label: m.name, markId: m.id });
@@ -64,6 +64,7 @@ export function useCourse(): CourseModel {
   const leewayDeg = useApp((s) => s.leewayDeg);
   const tackPenaltySec = useApp((s) => s.tackPenaltySec);
   const strategy = useApp((s) => s.strategy);
+  const upTwa = useApp((s) => s.upTwa);
   const customPolar = useApp((s) => s.customPolar);
   const startLine = useApp((s) => s.startLine);
   const marks = useApp((s) => s.marks);
@@ -71,8 +72,8 @@ export function useCourse(): CourseModel {
   const probe = useApp((s) => s.probe);
   const selectedLeg = useApp((s) => s.selectedLeg);
   return React.useMemo(
-    () => computeCourse({ cond, leewayDeg, tackPenaltySec, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
-    [cond, leewayDeg, tackPenaltySec, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
+    () => computeCourse({ cond, leewayDeg, tackPenaltySec, upTwa, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg }),
+    [cond, leewayDeg, tackPenaltySec, upTwa, strategy, customPolar, startLine, marks, finishAtStart, probe, selectedLeg],
   );
 }
 

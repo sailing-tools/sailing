@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fromBearing, bearingOf, add, len, sub, mul, norm180 } from '../src/nav/vec';
 import { JEANNEAU_410, polarSpeed, optimalAngles } from '../src/nav/polar';
-import { resolveWind, solveReach, solveLeg, startLineInfo, twoTack, tackBearings, laneParts, tackPair, BoatCfg, Strategy } from '../src/nav/solve';
+import { resolveWind, solveReach, solveLeg, startLineInfo, twoTack, tackBearings, laneParts, tackPair, sailingAngles, BoatCfg, Strategy } from '../src/nav/solve';
 
 const boat: BoatCfg = { polar: JEANNEAU_410, leewayDeg: 0, tackPenaltySec: 0 };
 const close = (a: number, b: number, tol = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(tol);
@@ -213,5 +213,31 @@ describe('lane strategy (stay off the laylines)', () => {
     expect(leg.kind).toBe('run');
     expect(leg.parts.length).toBe(4);
     close(len(sub(leg.parts[leg.parts.length - 1].end, { x: 0, y: 0 })), 0, 1e-9);
+  });
+});
+
+describe('own upwind angle', () => {
+  const w = { from: 0, kn: 12 };
+  it('overrides the polar optimum, with polar speed at that angle', () => {
+    const own = { ...boat, upTwa: 45 };
+    const a = sailingAngles(own, 12);
+    close(a.up.twa, 45);
+    close(a.up.stw, polarSpeed(JEANNEAU_410, 45, 12));
+    close(a.down.twa, optimalAngles(JEANNEAU_410, 12).down.twa);
+    const pair = tackPair(w, { x: 0, y: 0 }, own, 'up');
+    close(norm180(pair.starboard.heading), -45, 1e-9);
+    close(norm180(pair.port.heading), 45, 1e-9);
+  });
+  it('a wider angle widens the laylines and the tack bearings', () => {
+    const narrow = solveLeg({ x: 0, y: 0 }, { x: 0, y: 2 }, w, { x: 0, y: 0 }, { ...boat, upTwa: 40 });
+    const wide = solveLeg({ x: 0, y: 0 }, { x: 0, y: 2 }, w, { x: 0, y: 0 }, { ...boat, upTwa: 45 });
+    close(norm180(narrow.tackBearings!.starboard), 40, 1e-6);
+    close(norm180(wide.tackBearings!.starboard), 45, 1e-6);
+    expect(wide.timeH).toBeGreaterThan(0);
+  });
+  it('a mark 42 degrees off the wind is a beat at 45 but a reach at 40', () => {
+    const to = { x: Math.sin(42 * Math.PI / 180) * 2, y: Math.cos(42 * Math.PI / 180) * 2 };
+    expect(solveLeg({ x: 0, y: 0 }, to, w, { x: 0, y: 0 }, { ...boat, upTwa: 45 }).kind).toBe('beat');
+    expect(solveLeg({ x: 0, y: 0 }, to, w, { x: 0, y: 0 }, { ...boat, upTwa: 40 }).kind).toBe('reach');
   });
 });

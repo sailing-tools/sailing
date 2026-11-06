@@ -4,7 +4,7 @@ import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel } from '../co
 import { Dial, Speed } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
 import { Vec, len, add, mul, sub, bearingOf, norm180 } from '../nav/vec';
-import { Sailing, LegSolution } from '../nav/solve';
+import { Sailing, LegSolution, sailingAngles } from '../nav/solve';
 
 const twaTxt = (t: number) => `${Math.round(Math.abs(t))}° ${t >= 0 ? 'stbd' : 'port'}`;
 
@@ -343,11 +343,13 @@ export function BoatPanel() {
   const custom = useApp((s) => s.customPolar);
   const leeway = useApp((s) => s.leewayDeg);
   const penalty = useApp((s) => s.tackPenaltySec);
+  const upTwa = useApp((s) => s.upTwa);
   const c = useCourse();
   const [text, setText] = React.useState('');
   const [err, setErr] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState(false);
-  const opt = optimalAngles(c.boat.polar, c.wind.water.kn);
+  const best = optimalAngles(c.boat.polar, c.wind.water.kn);
+  const opt = sailingAngles(c.boat, c.wind.water.kn);
   const onFile = async (f: File | undefined) => { if (f) setText(await f.text()); };
   const doImport = () => {
     try {
@@ -363,12 +365,25 @@ export function BoatPanel() {
       <p className="boatname">{c.boat.polar.name}</p>
       <p className="muted small">{c.boat.polar.note}</p>
       <div className="kv"><span>Upwind at {c.wind.water.kn.toFixed(1)} kn</span><b>TWA {opt.up.twa.toFixed(0)}°, {opt.up.stw.toFixed(1)} kn, VMG {opt.up.vmg.toFixed(1)}</b></div>
+      {upTwa != null && <div className="kv"><span>Polar's best upwind</span><b>TWA {best.up.twa.toFixed(0)}°, VMG {best.up.vmg.toFixed(1)}</b></div>}
       <div className="kv"><span>Downwind</span><b>TWA {opt.down.twa.toFixed(0)}°, {opt.down.stw.toFixed(1)} kn, VMG {opt.down.vmg.toFixed(1)}</b></div>
       <div className="speed">
         <label htmlFor="leeway">Leeway</label>
         <input id="leeway" type="range" min={0} max={8} step={0.5} value={leeway} onPointerDown={checkpoint} onChange={(e) => setState({ leewayDeg: Number(e.target.value) })} />
         <output htmlFor="leeway">{leeway.toFixed(1)}°</output>
       </div>
+      <label className="check">
+        <input id="own-twa" type="checkbox" checked={upTwa != null} onChange={(e) => { checkpoint(); setState({ upTwa: e.target.checked ? Math.round(best.up.twa) : null }); }} />
+        Set my own upwind angle
+      </label>
+      {upTwa != null && (
+        <div className="speed">
+          <label htmlFor="up-twa">Upwind TWA</label>
+          <input id="up-twa" type="range" min={30} max={60} step={1} value={upTwa} onPointerDown={checkpoint} onChange={(e) => setState({ upTwa: Number(e.target.value) })} />
+          <output htmlFor="up-twa">{upTwa}°</output>
+        </div>
+      )}
+      {upTwa != null && <p className="small muted">Degrees off the wind on the water, each side, so tacking through about {2 * upTwa}°. Boat speed comes from the polar at this angle.</p>}
       <div className="speed">
         <label htmlFor="penalty">Tack cost</label>
         <input id="penalty" type="range" min={0} max={60} step={1} value={penalty} onPointerDown={checkpoint} onChange={(e) => setState({ tackPenaltySec: Number(e.target.value) })} />
