@@ -29,7 +29,9 @@ export interface AppState {
   /** A board picked on the chart or in the tacking table: its leg and index in that leg's parts. */
   selectedTack: { leg: number; idx: number } | null;
   probe: Vec | null;
-  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean };
+  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean; track?: boolean };
+  /** An imported GPS track: positions in nm on the local plane, t in seconds from the first fix. */
+  track?: { name: string; startUnix: number; fixes: { t: number; x: number; y: number }[] } | null;
   vectorMin: number;
   view: { cx: number; cy: number; scale: number }; // scale = px per nm
 }
@@ -56,14 +58,15 @@ export const initialState: AppState = {
   selectedLeg: 0,
   selectedTack: null,
   probe: null,
-  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true, racingMarks: true },
+  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true, racingMarks: true, track: true },
+  track: null,
   vectorMin: 6,
   view: { cx: 1.8, cy: 1.0, scale: 260 },
 };
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin', 'track',
 ];
 
 function load(): AppState {
