@@ -99,7 +99,7 @@ function ShareCourse() {
   );
 }
 
-const endName = (e: string) => (e === 'pin' ? 'Pin' : 'Committee');
+const endName = (r: { end: string; fromPinM?: number }) => (r.end === 'pin' ? 'Pin' : r.end === 'committee' ? 'Committee' : `Line, ${Math.round(r.fromPinM ?? 0)} m from pin`);
 const secs = (x: number) => `${Math.abs(Math.round(x))} s`;
 const gainText = (g: number) => (!isFinite(g) ? '—' : Math.abs(g) < 2 ? 'even' : `${g > 0 ? 'pin' : 'committee'} by ${secs(g)}`);
 
@@ -125,18 +125,32 @@ export function StartPanel() {
       <h2 id="h-start">Start strategy <span className="muted">to {markName}</span></h2>
       {best && twoBoard ? (
         <p className="verdict">
-          Start at the <b>{endName(best.end).toLowerCase()} end</b> on <b className={best.first === 'starboard' ? 'stbd-c' : 'port-c'}>{best.first}</b>
+          {best.end === 'line'
+            ? <>Start on the line <b>{Math.round(best.fromPinM)} m from the pin</b>, where the {best.onLayline} layline crosses it, on</>
+            : <>Start at the <b>{endName(best).toLowerCase()} end</b> on</>} <b className={best.first === 'starboard' ? 'stbd-c' : 'port-c'}>{best.first}</b>
           {best.parts.length > 1 && best.tackBearing !== undefined
             ? <>, then {word} after {fmtTime(best.parts[0].hours)} when {markName} bears {fmtDeg(best.tackBearing)}T, {offBowText(best.tackBearing, best.parts[0].sail.heading)}.</>
             : <>, and you lay {markName}.</>}
           {best.plan === 'lane' ? ` Then keep off the laylines: ${best.parts.length - 1} ${word}s in all.` : ''}
         </p>
       ) : null}
+      {best && twoBoard && (() => {
+        const quick = [...plan!.routes].filter((r) => isFinite(r.timeH)).sort((a, b) => a.timeH - b.timeH)[0];
+        return quick && quick.belowLine && quick !== best ? (
+          <p className="note">
+            The quickest route on paper ({endName(quick).toLowerCase()}, {quick.first} first, {secs((best.timeH - quick.timeH) * 3600)} quicker) starts by sailing back below the line, so it isn't recommended.
+          </p>
+        ) : null;
+      })()}
       {best && fastest && twoBoard && best !== fastest && (
         <p className="note">
-          This gives up {secs((best.timeH - fastest.timeH) * 3600)} on the quickest route ({endName(fastest.end).toLowerCase()}, {fastest.first} first, {planName(fastest).toLowerCase()})
-          {' '}to spend {pct(best.nearLayline)} of the beat near a layline instead of {pct(fastest.nearLayline)}
-          {best.downTide !== null && fastest.downTide !== null ? `, and ${pct(best.downTide)} down-tide instead of ${pct(fastest.downTide)}` : ''}.
+          This gives up {secs((best.timeH - fastest.timeH) * 3600)} on the quickest route ({endName(fastest).toLowerCase()}, {fastest.first} first, {planName(fastest).toLowerCase()})
+          {Math.abs(best.risk - fastest.risk) <= 0.05 && best.first === 'starboard' && fastest.first === 'port'
+            ? ` to start on starboard. That's one ${word} or less, which is less than starting on port into a starboard fleet usually costs.`
+            : <>
+              {' '}to spend {pct(best.nearLayline)} of the beat near a layline instead of {pct(fastest.nearLayline)}
+              {best.downTide !== null && fastest.downTide !== null ? `, and ${pct(best.downTide)} down-tide instead of ${pct(fastest.downTide)}` : ''}.
+            </>}
         </p>
       )}
       {best && twoBoard && best.first === 'port' && (() => {
@@ -171,11 +185,11 @@ export function StartPanel() {
             <thead><tr><th>From</th><th>First</th><th>Plan</th><th>Time</th><th>Near layline</th><th>Down-tide</th><th>{Word} at</th><th>Mark bears</th></tr></thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className={r === best ? 'best' : r.roundsOk ? '' : 'wrong'}>
-                  <td>{endName(r.end)}</td>
+                <tr key={i} className={r === best ? 'best' : r.roundsOk && !r.belowLine ? '' : 'wrong'}>
+                  <td>{endName(r)}</td>
                   <td className={r.first === 'starboard' ? 'stbd-c' : 'port-c'}>{side(r.first)}</td>
                   <td>{planName(r)}</td>
-                  <td>{fmtTime(r.timeH)}{r.roundsOk ? '' : ' *'}{fastest && r !== fastest ? ` (+${Math.round((r.timeH - fastest.timeH) * 3600)} s)` : ''}</td>
+                  <td>{fmtTime(r.timeH)}{r.roundsOk ? '' : ' *'}{r.belowLine ? ' †' : ''}{fastest && r !== fastest ? (d => ` (${d < 0 ? '−' : '+'}${Math.abs(d)} s)`)(Math.round((r.timeH - fastest.timeH) * 3600)) : ''}</td>
                   <td>{pct(r.nearLayline)}</td>
                   <td>{pct(r.downTide)}</td>
                   <td>{r.parts.length > 1 ? fmtTime(r.parts[0].hours) : 'lays it'}</td>
@@ -190,6 +204,7 @@ export function StartPanel() {
         Near layline: share of the beat within {Math.round((plan?.options.margin ?? 0.2) * 100)}% of a layline (your Tacking margin), not counting the last quarter, where you have to be on one.
         Down-tide: share of the beat on the side of the line to the mark that the stream sets you towards. The pick is the route with least of both within your allowance of the quickest.
         Wind alone is the course sailed in slack water, so it shows what the line bias is worth; tide is the rest.
+        {twoBoard && rows.some((r) => r.belowLine) ? ` † starts by sailing back below the start line, so it is never recommended.` : ''}
         {twoBoard && r1 ? ` * arrives on the wrong board to leave ${markName} to ${r1}, so it carries one extra ${word}.` : ''}
       </p>
     </section>

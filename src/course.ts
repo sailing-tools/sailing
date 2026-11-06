@@ -62,8 +62,8 @@ export function computeCourse(s: Pick<AppState, 'cond' | 'leewayDeg' | 'tackPena
       margin: s.strategy.margin, maxTacks: Math.max(2, s.strategy.maxTacks), allowanceSec: s.startAllowanceSec ?? 30,
     });
     // Leg 1 starts from the recommended end of the line, not the middle.
-    const end = startPlan?.best?.end;
-    if (end && points[0]?.label === 'Start') points[0] = { pos: s.startLine[end], label: end === 'pin' ? 'Start (pin)' : 'Start (committee)' };
+    const b = startPlan?.best;
+    if (b && points[0]?.label === 'Start') points[0] = { pos: b.from, label: b.end === 'pin' ? 'Start (pin)' : b.end === 'committee' ? 'Start (committee)' : `Start (${Math.round(b.fromPinM)} m from pin)` };
   }
   const legs: LegSolution[] = [];
   for (let i = 0; i + 1 < points.length; i++) legs.push(solveLeg(points[i].pos, points[i + 1].pos, wind.water, wind.tide, boat, s.strategy, roundAt(i + 1)));
