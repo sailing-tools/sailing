@@ -30,19 +30,19 @@ export interface AppState {
   view: { cx: number; cy: number; scale: number }; // scale = px per nm
 }
 
-// Default course in the central Solent off Cowes. Positions in nm from the Cowes origin.
+// Default course in the central Solent off Cowes (George's set-up, 2026-11-06). Positions in nm from the Cowes origin.
 export const initialState: AppState = {
-  cond: { windFrom: 250, windKn: 12, windRef: 'ground', tideTo: 80, tideKn: 1.8 },
+  cond: { windFrom: 29, windKn: 12.6, windRef: 'ground', tideTo: 89, tideKn: 2 },
   leewayDeg: 0,
   tackPenaltySec: 15,
-  upTwa: null,
-  strategy: { mode: 'laylines', margin: 0.25, maxTacks: 4 },
+  upTwa: 50,
+  strategy: { mode: 'lane', margin: 0.2, maxTacks: 2 },
   customPolar: null,
-  startLine: { committee: { x: 3.16, y: 1.61 }, pin: { x: 3.22, y: 1.38 } },
+  startLine: { committee: { x: 2.488, y: 0.039 }, pin: { x: 1.973, y: -0.058 } },
   pendingCommittee: null,
   marks: [
-    { id: 'm1', name: 'Windward', pos: { x: 1.0, y: 0.9 } },
-    { id: 'm2', name: 'Wing', pos: { x: 2.0, y: 1.9 } },
+    { id: 'm1', name: 'Windward', pos: { x: 2.68, y: 2.106 }, rounding: 'port' },
+    { id: 'm2', name: 'Wing', pos: { x: 0.975, y: 1.324 }, rounding: 'port' },
   ],
   finishAtStart: true,
   base: 'chart',
@@ -52,7 +52,7 @@ export const initialState: AppState = {
   probe: null,
   layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true },
   vectorMin: 6,
-  view: { cx: 2.1, cy: 1.3, scale: 260 },
+  view: { cx: 1.8, cy: 1.0, scale: 260 },
 };
 
 const KEY = 'solent-race-calc-v3';
