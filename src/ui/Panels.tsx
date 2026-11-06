@@ -190,6 +190,8 @@ const offBow = (markBrg: number, heading: number) => {
   const r = norm180(markBrg - heading);
   return `${Math.round(Math.abs(r))}° ${r >= 0 ? 'stbd' : 'port'}`;
 };
+/** "301°T · 100° port" : true bearing and relative bearing off the bow on that board's heading. */
+const both = (brg: number, heading: number | undefined) => `${fmtDeg(brg)}T${heading === undefined ? '' : ` · ${offBow(brg, heading)}`}`;
 const side = (t: string) => (t === 'starboard' ? 'Stbd' : 'Port');
 
 export function TackingPanel() {
@@ -234,19 +236,20 @@ export function TackingPanel() {
         <>
           <div className="bearings">
             {lane && leg.lane && <div className="kv"><span>This leg</span><b>{leg.parts.length - 1} {word}s of {strategy.maxTacks} allowed, {fmtTime(leg.timeH)}</b></div>}
+            <p className="small muted bearings-h">{Word} when the mark bears (true · off the bow)</p>
             {lane && leg.lane && (
               <>
-                <div className="kv"><span>Inner laylines: on stbd, {word} when the mark bears</span><b className="stbd-c">{fmtDeg(leg.lane.bearings.starboard)}T</b></div>
-                <div className="kv"><span>on port, {word} when it bears</span><b className="port-c">{fmtDeg(leg.lane.bearings.port)}T</b></div>
+                <div className="kv"><span>Inner layline, on stbd</span><b className="stbd-c">{both(leg.lane.bearings.starboard, leg.pair?.starboard.heading)}</b></div>
+                <div className="kv"><span>Inner layline, on port</span><b className="port-c">{both(leg.lane.bearings.port, leg.pair?.port.heading)}</b></div>
               </>
             )}
-            <div className="kv"><span>{lane ? 'Final ' + word + ' on the layline: on stbd' : `On stbd, ${word}`} when the mark bears</span><b className="stbd-c">{fmtDeg(leg.tackBearings.starboard)}T</b></div>
-            <div className="kv"><span>{lane ? 'on port' : `On port, ${word}`} when it bears</span><b className="port-c">{fmtDeg(leg.tackBearings.port)}T</b></div>
+            <div className="kv"><span>{lane ? 'Last ' + word + ', layline' : 'Layline'}, on stbd</span><b className="stbd-c">{both(leg.tackBearings.starboard, leg.pair?.starboard.heading)}</b></div>
+            <div className="kv"><span>{lane ? 'Last ' + word + ', layline' : 'Layline'}, on port</span><b className="port-c">{both(leg.tackBearings.port, leg.pair?.port.heading)}</b></div>
           </div>
           {leg.parts.length > 0 && (
             <div className="tablewrap">
               <table className="opts boards" aria-label={`Boards on leg ${selected + 1}`}>
-                <thead><tr><th>#</th><th>Board</th><th>CoG</th><th>Time</th><th>{Word} when mark bears</th><th>Off the bow</th></tr></thead>
+                <thead><tr><th>#</th><th>Board</th><th>CTW</th><th>CoG</th><th>Time</th><th>{Word} at: off bow</th><th>True</th></tr></thead>
                 <tbody>
                   {leg.parts.map((p, j) => {
                     const last = j === leg.parts.length - 1;
@@ -255,10 +258,11 @@ export function TackingPanel() {
                       <tr key={j}>
                         <td>{j + 1}</td>
                         <td className={p.sail.tack === 'starboard' ? 'stbd-c' : 'port-c'}>{side(p.sail.tack)}</td>
+                        <td>{fmtDeg(p.sail.heading)}</td>
                         <td>{fmtDeg(p.sail.cog)}</td>
                         <td>{fmtTime(p.hours)}</td>
-                        <td>{last ? 'mark' : `${fmtDeg(brg)}T`}</td>
-                        <td>{last ? '—' : offBow(brg, p.sail.heading)}</td>
+                        <td><b>{last ? 'mark' : offBow(brg, p.sail.heading)}</b></td>
+                        <td>{last ? '—' : `${fmtDeg(brg)}T`}</td>
                       </tr>
                     );
                   })}
@@ -268,7 +272,7 @@ export function TackingPanel() {
           )}
           <p className="small muted">
             With tide, the mark bears the next board's course over the ground when you reach the layline, not the next heading.
-            Take a hand-bearing on the mark and {word} when it reads the bearing above. Bearings are true; variation in the Solent is under 1°.
+            Off the bow is the angle from your bow to the mark on that board's heading (CTW), so you can read it from the pulpit, a sight line or the instruments without a compass. Or take a hand-bearing and {word} when it reads the true bearing. Bearings are true; variation in the Solent is under 1°.
           </p>
         </>
       ) : (
