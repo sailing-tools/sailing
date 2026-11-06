@@ -194,8 +194,8 @@ export function Chart() {
           <g>
             {line(leg.to, add(leg.to, mul(leg.laylines!.starboard, layLen)), 'layline stbd')}
             {line(leg.to, add(leg.to, mul(leg.laylines!.port, layLen)), 'layline port')}
-            {sel && label(add(leg.to, mul(leg.laylines!.starboard, layLen)), `Stbd layline ${fmtDeg(bearingOf(mul(leg.laylines!.starboard, -1)))}`, 'lbl stbd-t')}
-            {sel && label(add(leg.to, mul(leg.laylines!.port, layLen)), `Port layline ${fmtDeg(bearingOf(mul(leg.laylines!.port, -1)))}`, 'lbl port-t')}
+            {sel && label(add(leg.to, mul(leg.laylines!.starboard, Math.min(layLen, 170 / k))), `Starboard layline (CoG ${fmtDeg(bearingOf(mul(leg.laylines!.starboard, -1)))})`, 'lbl stbd-t layline-t')}
+            {sel && label(add(leg.to, mul(leg.laylines!.port, Math.min(layLen, 230 / k))), `Port layline (CoG ${fmtDeg(bearingOf(mul(leg.laylines!.port, -1)))})`, 'lbl port-t layline-t')}
           </g>
         )}
         <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className="rhumb" />
@@ -203,6 +203,8 @@ export function Chart() {
           <g>
             {line(leg.to, add(leg.to, mul(leg.lane.starboard, layLen)), 'layline inner stbd')}
             {line(leg.to, add(leg.to, mul(leg.lane.port, layLen)), 'layline inner port')}
+            {label(add(leg.to, mul(leg.lane.starboard, Math.min(layLen, 300 / k))), `${Math.round(leg.lane.margin * 100)}% in from stbd layline`, 'lbl stbd-t layline-t inner-t')}
+            {label(add(leg.to, mul(leg.lane.port, Math.min(layLen, 300 / k))), `${Math.round(leg.lane.margin * 100)}% in from port layline`, 'lbl port-t layline-t inner-t')}
           </g>
         )}
         {leg.parts.map((pt, j) => {
@@ -261,22 +263,20 @@ export function Chart() {
         <Graticule base={base} w={w} h={h} toS={toS} fromS={fromS} />
         {layers.tide && <TideField w={w} h={h} tide={course.wind.tide} />}
         {course.legs.map(legLayer)}
-        {layers.startOptions && course.start && (['committee', 'pin'] as const).map((end) => {
-          const l = end === 'pin' ? course.start!.pinLeg : course.start!.committeeLeg;
-          if (!l || l.kind === 'reach' || l.kind === 'blocked') return null;
-          const routes = [l.parts, l.altParts ?? []];
-          return (
-            <g key={'so-' + end} className="start-opt">
-              {routes.map((parts, r) => parts.map((pt, j) => (
-                <g key={r + ':' + j}>
-                  {line(pt.start, pt.end, `track opt ${pt.sail.tack}`)}
-                  {j === 0 && parts.length > 1 && (() => { const s2 = toS(pt.end); return <circle cx={s2.x} cy={s2.y} r={3} className={`tackdot ${pt.sail.tack}`} />; })()}
-                  {j === 0 && parts.length > 1 && label(pt.end, `${end === 'pin' ? 'Pin' : 'Cttee'}: ${pt.sail.tack === 'starboard' ? 'stbd' : 'port'} ${fmtTime(pt.hours)}, tack at mark ${fmtDeg(bearingOf(sub(l.to, pt.end)))}`, 'lbl opt-t', end === 'pin' ? 26 : 14)}
+        {layers.startOptions && course.startPlan && (course.startPlan.kind === 'beat' || course.startPlan.kind === 'run') && (
+          <g className="start-opt">
+            {course.startPlan.routes.map((r, ri) => {
+              const best = r === course.startPlan!.best;
+              return (
+                <g key={'so' + ri} className={best ? 'so-best' : r.roundsOk ? '' : 'so-wrong'}>
+                  {r.parts.map((pt, j) => <g key={j}>{line(pt.start, pt.end, `track opt ${pt.sail.tack}${best ? ' best' : ''}`)}</g>)}
+                  {r.parts.length > 1 && (() => { const s2 = toS(r.parts[0].end); return <circle cx={s2.x} cy={s2.y} r={best ? 4 : 3} className={`tackdot ${r.parts[0].sail.tack}`} />; })()}
+                  {best && r.parts.length > 1 && r.tackBearing !== undefined && label(r.parts[0].end, `Best start: ${r.end}, ${r.first === 'starboard' ? 'stbd' : 'port'} ${fmtTime(r.parts[0].hours)}, tack at mark ${fmtDeg(r.tackBearing)}`, 'lbl opt-t best-t', 16)}
                 </g>
-              )))}
-            </g>
-          );
-        })}
+              );
+            })}
+          </g>
+        )}
         {probe && course.probeLeg && (
           <g className="probe">
             {course.probeLeg.parts.map((pt, j) => <g key={j}>{line(pt.start, pt.end, `track probe-track`)}</g>)}

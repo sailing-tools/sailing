@@ -248,7 +248,11 @@ export interface LegSolution {
   /** Mark bearing (true, from the boat) at which to tack onto the layline, for each board you might be on. */
   tackBearings?: { starboard: number; port: number };
   /** Lane strategy only: unit directions FROM the mark along the inner laylines, and their tack bearings. */
-  lane?: { starboard: Vec; port: Vec; bearings: { starboard: number; port: number }; margin: number };
+  lane?: {
+    starboard: Vec; port: Vec; bearings: { starboard: number; port: number }; margin: number;
+    /** Where the leg starts, as a share of the way in from each real layline (0 on it, 0.5 in the middle). */
+    startOff?: { starboard: number; port: number };
+  };
   reach: ReachSolution;
   note?: string;
   /** Set when the mark at the end has a rounding side. ok false: the approach turns the wrong way round it. */
@@ -294,7 +298,12 @@ function solveLegInner(
     if (useLane) {
       const bearings = tackBearings(pair.starboard.ground, pair.port.ground, strategy.margin);
       // The starboard-side inner layline is where a port-tack boat tacks onto starboard, and vice versa.
-      lane = { starboard: fromBearing(bearings.port + 180), port: fromBearing(bearings.starboard + 180), bearings, margin: strategy.margin };
+      const T = sol ? sol.a + sol.b : 0;
+      lane = {
+        starboard: fromBearing(bearings.port + 180), port: fromBearing(bearings.starboard + 180), bearings, margin: strategy.margin,
+        // On the starboard layline the port time b is zero, so b's share is how far in from it you are.
+        startOff: sol && T > 1e-9 ? { starboard: Math.max(0, sol.b) / T, port: Math.max(0, sol.a) / T } : undefined,
+      };
     }
     if (sol && sol.a >= -1e-9 && sol.b >= -1e-9 && useLane) {
       // A lane board must be at least a minute, twice the tack cost and 5% of the leg.
