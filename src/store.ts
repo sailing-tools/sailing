@@ -172,3 +172,28 @@ export function useApp<T>(sel: (s: AppState) => T): T {
 
 let idn = 0;
 export const newId = () => 'm' + Date.now().toString(36) + (idn++).toString(36);
+
+// ----- Named courses saved in this browser -----
+const SAVED_KEY = 'solent-race-calc-courses';
+export interface SavedCourse { name: string; savedAt: number; data: Partial<AppState> }
+
+export function listCourses(): SavedCourse[] {
+  try { const a = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+function writeCourses(a: SavedCourse[]) {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(a)); return true; } catch { return false; }
+}
+/** Save the course, wind, tide and boat settings under a name, replacing any with the same name. */
+export function saveCourse(name: string): boolean {
+  const data: Partial<AppState> = {};
+  for (const k of SHARE) (data as any)[k] = state[k];
+  const rest = listCourses().filter((c) => c.name.toLowerCase() !== name.toLowerCase());
+  return writeCourses([{ name, savedAt: Date.now(), data }, ...rest]);
+}
+export function loadCourse(name: string) {
+  const c = listCourses().find((x) => x.name === name);
+  if (!c) return;
+  checkpoint();
+  setState({ ...c.data, selectedLeg: 0, selectedTack: null, probe: null });
+}
+export function deleteCourse(name: string) { writeCourses(listCourses().filter((c) => c.name !== name)); }
