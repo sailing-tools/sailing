@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { useApp, setState, getState, undo, resetAll, Tool } from '../store';
 import { Chart } from './Chart';
+import { TrackPanel } from './TrackPanel';
+import { LinePanel } from './LinePanel';
 import { computeCourse } from '../course';
 import { ConditionsPanel, CoursePanel, StartPanel, LegsPanel, TackingPanel, VectorPanel, BoatPanel, DisplayPanel } from './Panels';
 
@@ -57,6 +59,7 @@ export function App() {
   const base = useApp((s) => s.base);
   const [confirmReset, setConfirmReset] = React.useState(false);
   React.useEffect(() => { const t = setTimeout(fitView, 50); return () => clearTimeout(t); }, []);
+  React.useEffect(() => { const f = () => setTimeout(fitView, 30); window.addEventListener('course-loaded', f); return () => window.removeEventListener('course-loaded', f); }, []);
   return (
     <div className="app">
       <header className="top">
@@ -78,11 +81,13 @@ export function App() {
       </main>
       <aside className="side">
         <ConditionsPanel />
+        <LinePanel />
         <StartPanel />
         <LegsPanel />
         <TackingPanel />
         <VectorPanel />
         <CoursePanel />
+        <TrackPanel />
         <BoatPanel />
         <DisplayPanel />
         <section className="panel">

@@ -29,7 +29,9 @@ export interface AppState {
   /** A board picked on the chart or in the tacking table: its leg and index in that leg's parts. */
   selectedTack: { leg: number; idx: number } | null;
   probe: Vec | null;
-  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean };
+  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean; track?: boolean };
+  /** An imported GPS track: positions in nm on the local plane, t in seconds from the first fix. */
+  track?: { name: string; startUnix: number; fixes: { t: number; x: number; y: number }[]; /** Gun time in seconds from the first fix; absent means found from the start line. */ gunT?: number; /** Upwind TWA to analyse with; absent means the boat's. */ twa?: number } | null;
   vectorMin: number;
   view: { cx: number; cy: number; scale: number }; // scale = px per nm
 }
@@ -56,14 +58,15 @@ export const initialState: AppState = {
   selectedLeg: 0,
   selectedTack: null,
   probe: null,
-  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true, racingMarks: true },
+  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true, racingMarks: true, track: true },
+  track: null,
   vectorMin: 6,
   view: { cx: 1.8, cy: 1.0, scale: 260 },
 };
 
 const KEY = 'solent-race-calc-v3';
 const PERSIST: (keyof AppState)[] = [
-  'cond', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin',
+  'cond', 'leewayDeg', 'speedPct', 'tackPenaltySec', 'upTwa', 'strategy', 'startAllowanceSec', 'customPolar', 'startLine', 'marks', 'finishAtStart', 'base', 'layers', 'vectorMin', 'track',
 ];
 
 function load(): AppState {
@@ -108,6 +111,14 @@ function fromLink(base: AppState): AppState {
 }
 
 let state: AppState = fromLink(load());
+
+// A course link opened while the app is already open in this tab only changes the hash, so load it then too.
+if (typeof window !== 'undefined') window.addEventListener('hashchange', () => {
+  if (!parseCourseHash(location.hash)) return;
+  checkpoint();
+  setState(fromLink(state));
+  window.dispatchEvent(new Event('course-loaded'));
+});
 const listeners = new Set<() => void>();
 const undoStack: string[] = [];
 let saveTimer: number | undefined;
@@ -161,3 +172,28 @@ export function useApp<T>(sel: (s: AppState) => T): T {
 
 let idn = 0;
 export const newId = () => 'm' + Date.now().toString(36) + (idn++).toString(36);
+
+// ----- Named courses saved in this browser -----
+const SAVED_KEY = 'solent-race-calc-courses';
+export interface SavedCourse { name: string; savedAt: number; data: Partial<AppState> }
+
+export function listCourses(): SavedCourse[] {
+  try { const a = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+function writeCourses(a: SavedCourse[]) {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(a)); return true; } catch { return false; }
+}
+/** Save the course, wind, tide and boat settings under a name, replacing any with the same name. */
+export function saveCourse(name: string): boolean {
+  const data: Partial<AppState> = {};
+  for (const k of SHARE) (data as any)[k] = state[k];
+  const rest = listCourses().filter((c) => c.name.toLowerCase() !== name.toLowerCase());
+  return writeCourses([{ name, savedAt: Date.now(), data }, ...rest]);
+}
+export function loadCourse(name: string) {
+  const c = listCourses().find((x) => x.name === name);
+  if (!c) return;
+  checkpoint();
+  setState({ ...c.data, selectedLeg: 0, selectedTack: null, probe: null });
+}
+export function deleteCourse(name: string) { writeCourses(listCourses().filter((c) => c.name !== name)); }

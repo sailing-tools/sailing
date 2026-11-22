@@ -452,3 +452,56 @@ describe('boat speed percentage', () => {
     expect(b.totalH).toBeGreaterThan(a.totalH);
   });
 });
+
+import { analyseTrack, findStart, parseGpx, Fix } from '../src/nav/track';
+import { parseLatLon, offset } from '../src/geo';
+
+describe('positions typed by hand', () => {
+  it('reads decimal degrees and degrees-minutes', () => {
+    expect(parseLatLon('50.7582, -1.2225')).toEqual({ lat: 50.7582, lon: -1.2225 });
+    const p = parseLatLon("50°45.49'N 001°13.35'W")!;
+    expect(p.lat).toBeCloseTo(50 + 45.49 / 60, 6);
+    expect(p.lon).toBeCloseTo(-(1 + 13.35 / 60), 6);
+    expect(parseLatLon('N50 45.49 W1 13.35')!.lon).toBeLessThan(0);
+    expect(parseLatLon('hello')).toBeNull();
+  });
+  it('offsets a point by bearing and metres', () => {
+    const q = offset({ x: 0, y: 0 }, 90, 1852);
+    expect(q.x).toBeCloseTo(1, 6);
+    expect(q.y).toBeCloseTo(0, 6);
+  });
+});
+
+describe('GPS track analysis', () => {
+  // Beat into a 000° wind at 5 kn through the water, TWA 45°, with 1 kn of tide setting 090°.
+  const tide = fromBearing(90, 1);
+  const fixes: Fix[] = [];
+  let p = { x: 0, y: 0 };
+  for (let t = 0; t <= 1800; t++) {
+    fixes.push({ t, p });
+    const heading = Math.floor(t / 300) % 2 === 0 ? 315 : 45;
+    p = add(p, mul(add(fromBearing(heading, 5), tide), 1 / 3600));
+  }
+  it('recovers wind, tide and speed from the two tacks', () => {
+    const a = analyseTrack(fixes, { twa: 45, windFrom: 10 });
+    expect(a.wind).not.toBeNull();
+    expect(Math.abs(norm180(a.wind!.from))).toBeLessThan(1.5);
+    expect(a.wind!.stw).toBeCloseTo(5, 0);
+    expect(len(sub(a.wind!.tide, tide))).toBeLessThan(0.1);
+    expect(a.boards.filter((b) => b.kind === 'starboard').length).toBe(3);
+    expect(a.boards.filter((b) => b.kind === 'port').length).toBe(3);
+  });
+  it('finds the start where the track crosses the line onto the course side', () => {
+    const pin = { x: -0.2, y: 0.05 }, committee = { x: 0.2, y: 0.05 };
+    const t = findStart(fixes, committee, pin, { x: 0, y: 3 });
+    expect(t).not.toBeNull();
+    expect(t!).toBeGreaterThan(30);
+    expect(t!).toBeLessThan(60);
+  });
+  it('parses GPX track points in time order', () => {
+    const g = '<gpx><trk><trkseg><trkpt lat="50.77" lon="-1.22"><time>2026-11-01T10:00:05Z</time></trkpt><trkpt lat="50.76" lon="-1.21"><time>2026-11-01T10:00:00Z</time></trkpt></trkseg></trk></gpx>';
+    const r = parseGpx(g);
+    expect(r.length).toBe(2);
+    expect(r[0].lat).toBe(50.76);
+  });
+});

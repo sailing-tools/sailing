@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { SOLENT_MARKS, SOLENT_MARKS_SOURCE } from '../data/solentMarks';
 import { findSolentMark, solentToMark, colourName, fmtLatLon } from '../marks';
-import { useApp, setState, checkpoint, getState, courseLink } from '../store';
+import { useApp, setState, checkpoint, getState, courseLink, listCourses, saveCourse, loadCourse, deleteCourse } from '../store';
 import { useCourse, fmtDeg, fmtKn, fmtTime, kindLabel, CourseModel, tackNarrative, offBowText } from '../course';
 import { Dial, Speed, Slider } from './Dial';
 import { optimalAngles, parsePolar } from '../nav/polar';
@@ -81,7 +81,7 @@ export function CoursePanel() {
   return (
     <section className="panel" aria-labelledby="h-course">
       <h2 id="h-course">Course</h2>
-      {!startLine && <p className="muted">No start line yet. Use Start line in the toolbar.</p>}
+      {!startLine && <p className="muted">No start line yet. Use Start line in the toolbar, or ping it in Start line above.</p>}
       <ol className="marklist">
         {marks.map((m, i) => (
           <li key={m.id}>
@@ -104,8 +104,53 @@ export function CoursePanel() {
         Finish back at the start line
       </label>
       <AddSolentMark />
+      <SavedCourses />
       <ShareCourse />
     </section>
+  );
+}
+
+function SavedCourses() {
+  const [list, setList] = React.useState(listCourses);
+  const [name, setName] = React.useState('');
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [confirm, setConfirm] = React.useState<string | null>(null);
+  const save = () => {
+    const n = name.trim();
+    if (!n) return;
+    const replaced = list.some((c) => c.name.toLowerCase() === n.toLowerCase());
+    setMsg(saveCourse(n) ? `${replaced ? 'Updated' : 'Saved'} "${n}".` : "Couldn't save: this browser's storage is full or blocked.");
+    setList(listCourses()); setName('');
+  };
+  const when = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' });
+  return (
+    <div className="saved">
+      <label htmlFor="save-name">Save this course</label>
+      <div className="row">
+        <input id="save-name" value={name} placeholder="Name, e.g. Race 2 Peel Bank" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+        <button type="button" onClick={save} disabled={!name.trim()}>Save</button>
+      </div>
+      {msg && <p className="small muted">{msg}</p>}
+      {list.length > 0 && (
+        <ul className="savedlist">
+          {list.map((c) => (
+            <li key={c.name}>
+              <button type="button" className="linkish" onClick={() => { loadCourse(c.name); setMsg(`Loaded "${c.name}". Undo puts back what you had.`); }}>{c.name}</button>
+              <span className="small muted">{when(c.savedAt)}</span>
+              {confirm === c.name ? (
+                <>
+                  <button type="button" className="danger" onClick={() => { deleteCourse(c.name); setList(listCourses()); setConfirm(null); }}>Delete</button>
+                  <button type="button" onClick={() => setConfirm(null)}>Keep</button>
+                </>
+              ) : (
+                <button type="button" className="danger" onClick={() => setConfirm(c.name)} aria-label={`Delete saved course ${c.name}`}>×</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="small muted">Saved courses keep the marks, start line, wind, tide and boat settings. They live in this browser only: use Copy course link to move one to another phone.</p>
+    </div>
   );
 }
 
@@ -578,6 +623,7 @@ export function DisplayPanel() {
         <label className="check"><input id="ly-tri" type="checkbox" checked={layers.triangles} onChange={() => tog('triangles')} />Vector triangles</label>
         <label className="check"><input id="ly-rm" type="checkbox" checked={layers.racingMarks} onChange={() => tog('racingMarks')} />Solent racing marks</label>
         <label className="check"><input id="ly-tide" type="checkbox" checked={layers.tide} onChange={() => tog('tide')} />Tide arrows</label>
+        <label className="check"><input id="ly-trk" type="checkbox" checked={layers.track !== false} onChange={() => setState((s) => ({ layers: { ...s.layers, track: s.layers.track === false } }))} />GPS track</label>
       </div>
       <Slider id="vecmin" label="Vector length" min={2} max={60} step={1} value={vectorMin} onChange={(v) => setState({ vectorMin: v })} format={(v) => `${v} min`} />
       <p className="small muted">Vectors on the chart show where each velocity takes you in this many minutes.</p>
