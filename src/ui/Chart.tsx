@@ -5,6 +5,7 @@ import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel, tac
 import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf, norm180, D2R } from '../nav/vec';
 import { LegSolution, Sailing } from '../nav/solve';
 import { SOLENT_MARKS, RacingMark } from '../data/solentMarks';
+import { LayerToggles } from './Panels';
 import { solentPos, solentToMark, colourName, fmtLatLon } from '../marks';
 
 type Drag =
@@ -386,6 +387,7 @@ export function Chart() {
         <ScaleBar k={k} h={h} />
       </svg>
       <WindRose course={course} />
+      <LayersControl />
       <Hint tool={tool} pending={!!pendingCommittee} />
       {tool === 'select' && libCard && (() => { const m = SOLENT_MARKS.find((x) => x.code === libCard); return m ? <RacingMarkCard m={m} onClose={() => setLibCard(null)} /> : null; })()}
       {tool === 'select' && lineCard && startLine && <StartLineCard committee={startLine.committee} pin={startLine.pin} course={course} onClose={() => setLineCard(false)} />}
@@ -542,6 +544,31 @@ function ScaleBar({ k, h }: { k: number; h: number }) {
       <rect x={px / 2} y={0} width={px / 2} height={5} className="sb-b" />
       <text x={0} y={-5} className="grid-t">{labelTxt}</text>
     </g>
+  );
+}
+
+/** Floating, expandable layer switches at the bottom-left of the chart, so they are one tap away mid-race. */
+function LayersControl() {
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  return (
+    <div className={`layers-fab${open ? ' open' : ''}`}>
+      {open && (
+        <div className="layers-pop" id="layers-pop" role="group" aria-label="Chart layers">
+          <LayerToggles idPrefix="fab" />
+        </div>
+      )}
+      <button type="button" className="layers-btn" aria-expanded={open} aria-controls="layers-pop" onClick={() => setOpen((o) => !o)}>
+        <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden><path d="M12 3 L21 8 L12 13 L3 8 Z M3 12.5 L12 17.5 L21 12.5 M3 17 L12 22 L21 17" /></svg>
+        <span>Layers</span>
+        <svg viewBox="0 0 24 24" width={14} height={14} aria-hidden className="chev"><path d={open ? 'M6 9 L12 15 L18 9' : 'M6 15 L12 9 L18 15'} /></svg>
+      </button>
+    </div>
   );
 }
 

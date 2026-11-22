@@ -191,6 +191,26 @@ button.linkish { border: 0; background: none; padding: 0; color: var(--accent); 
 .rose-text { text-align: center; line-height: 1.35; }
 .rose-text .tide-t { color: var(--tide); }
 
+/* Floating Layers control: bottom-left of the chart, above the scale bar; the list opens upwards. */
+.layers-fab {
+  position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 56px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: calc(100% - 20px);
+}
+.layers-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 12px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); cursor: pointer; font-weight: 500;
+}
+.layers-fab.open .layers-btn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.layers-btn svg path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.layers-pop {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18); width: 260px; max-width: 100%;
+  max-height: calc(64svh - 140px); overflow-y: auto;
+}
+.layers-pop .toggles { grid-template-columns: 1fr; gap: 10px; }
+.layers-pop .check { min-height: 24px; }
+
 .tack-hit { fill: transparent; cursor: pointer; }
 .board-hit { stroke: transparent; stroke-width: 30; stroke-linecap: round; cursor: pointer; }
 /* Drawn lines and labels never take taps; the hit layers above them do. */
