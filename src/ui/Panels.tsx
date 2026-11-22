@@ -608,24 +608,34 @@ export function BoatPanel() {
   );
 }
 
-export function DisplayPanel() {
+/** The layer checkboxes, shared by the Display panel and the floating Layers control on the chart. */
+export function LayerToggles({ idPrefix = 'ly' }: { idPrefix?: string }) {
   const layers = useApp((s) => s.layers);
-  const vectorMin = useApp((s) => s.vectorMin);
   const tog = (k: keyof typeof layers) => setState((s) => ({ layers: { ...s.layers, [k]: !s.layers[k] } }));
+  const box = (key: string, label: string, checked: boolean, onChange: () => void, disabled = false) => (
+    <label className="check"><input id={`${idPrefix}-${key}`} type="checkbox" checked={checked} onChange={onChange} disabled={disabled} />{label}</label>
+  );
+  return (
+    <div className="toggles">
+      {box('tide', 'Tide arrows', layers.tide, () => tog('tide'))}
+      {box('wind', 'Wind arrows', layers.wind, () => tog('wind'))}
+      {box('lay', 'Laylines', layers.laylines, () => tog('laylines'))}
+      {box('all', 'Every leg, not just the selected one', layers.allLaylines, () => tog('allLaylines'), !layers.laylines)}
+      {box('both', 'Port and starboard routes', layers.bothRoutes, () => tog('bothRoutes'))}
+      {box('start', 'Start options from each end', layers.startOptions, () => tog('startOptions'))}
+      {box('tri', 'Vector triangles', layers.triangles, () => tog('triangles'))}
+      {box('rm', 'Solent racing marks', layers.racingMarks, () => tog('racingMarks'))}
+      {box('trk', 'GPS track', layers.track !== false, () => setState((s) => ({ layers: { ...s.layers, track: s.layers.track === false } })))}
+    </div>
+  );
+}
+
+export function DisplayPanel() {
+  const vectorMin = useApp((s) => s.vectorMin);
   return (
     <section className="panel" aria-labelledby="h-disp">
       <h2 id="h-disp">Display</h2>
-      <div className="toggles">
-        <label className="check"><input id="ly-lay" type="checkbox" checked={layers.laylines} onChange={() => tog('laylines')} />Laylines</label>
-        <label className="check"><input id="ly-all" type="checkbox" checked={layers.allLaylines} onChange={() => tog('allLaylines')} disabled={!layers.laylines} />Every leg, not just the selected one</label>
-        <label className="check"><input id="ly-both" type="checkbox" checked={layers.bothRoutes} onChange={() => tog('bothRoutes')} />Port and starboard routes</label>
-        <label className="check"><input id="ly-start" type="checkbox" checked={layers.startOptions} onChange={() => tog('startOptions')} />Start options from each end</label>
-        <label className="check"><input id="ly-tri" type="checkbox" checked={layers.triangles} onChange={() => tog('triangles')} />Vector triangles</label>
-        <label className="check"><input id="ly-rm" type="checkbox" checked={layers.racingMarks} onChange={() => tog('racingMarks')} />Solent racing marks</label>
-        <label className="check"><input id="ly-tide" type="checkbox" checked={layers.tide} onChange={() => tog('tide')} />Tide arrows</label>
-        <label className="check"><input id="ly-wind" type="checkbox" checked={layers.wind} onChange={() => tog('wind')} />Wind arrows</label>
-        <label className="check"><input id="ly-trk" type="checkbox" checked={layers.track !== false} onChange={() => setState((s) => ({ layers: { ...s.layers, track: s.layers.track === false } }))} />GPS track</label>
-      </div>
+      <LayerToggles />
       <Slider id="vecmin" label="Vector length" min={2} max={60} step={1} value={vectorMin} onChange={(v) => setState({ vectorMin: v })} format={(v) => `${v} min`} />
       <p className="small muted">Vectors on the chart show where each velocity takes you in this many minutes.</p>
     </section>
