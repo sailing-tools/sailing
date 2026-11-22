@@ -29,7 +29,7 @@ export interface AppState {
   /** A board picked on the chart or in the tacking table: its leg and index in that leg's parts. */
   selectedTack: { leg: number; idx: number } | null;
   probe: Vec | null;
-  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean; track?: boolean };
+  layers: { laylines: boolean; allLaylines: boolean; triangles: boolean; tide: boolean; wind: boolean; bothRoutes: boolean; startOptions: boolean; racingMarks: boolean; track?: boolean };
   /** An imported GPS track: positions in nm on the local plane, t in seconds from the first fix. */
   track?: { name: string; startUnix: number; fixes: { t: number; x: number; y: number }[]; /** Gun time in seconds from the first fix; absent means found from the start line. */ gunT?: number; /** Upwind TWA to analyse with; absent means the boat's. */ twa?: number } | null;
   vectorMin: number;
@@ -58,7 +58,7 @@ export const initialState: AppState = {
   selectedLeg: 0,
   selectedTack: null,
   probe: null,
-  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, bothRoutes: true, startOptions: true, racingMarks: true, track: true },
+  layers: { laylines: true, allLaylines: true, triangles: true, tide: true, wind: true, bothRoutes: true, startOptions: true, racingMarks: true, track: true },
   track: null,
   vectorMin: 6,
   view: { cx: 1.8, cy: 1.0, scale: 260 },

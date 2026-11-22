@@ -315,6 +315,7 @@ export function Chart() {
         <rect x={0} y={0} width={w} height={h} className="sea" />
         {base === 'chart' && <path d={LAND_PATH} transform={landTransform} className="land" vectorEffect="non-scaling-stroke" />}
         <Graticule base={base} w={w} h={h} toS={toS} fromS={fromS} />
+        {layers.wind && <WindField w={w} h={h} from={course.wind.water.from} kn={course.wind.water.kn} />}
         {layers.tide && <TideField w={w} h={h} tide={course.wind.tide} />}
         {layers.track !== false && trackModel && <TrackLayer m={trackModel} toS={toS} />}
         {course.legs.map(legLayer)}
@@ -431,6 +432,9 @@ function Defs() {
       <marker id="ah-small" viewBox="-10 -5 11 10" refX={0} refY={0} markerWidth={10} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
         <path d="M-8,-3.5 L0,0 L-8,3.5" className="ah ah-tidefield" />
       </marker>
+      <marker id="ah-windfield" viewBox="-10 -5 11 10" refX={0} refY={0} markerWidth={10} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M-8,-3.5 L0,0 L-8,3.5" className="ah ah-windfield" />
+      </marker>
     </defs>
   );
 }
@@ -499,6 +503,30 @@ function TideField({ w, h, tide }: { w: number; h: number; tide: Vec }) {
   for (let y = gap / 2; y < h; y += gap) {
     for (let x = gap / 2 + ((y / gap) % 2 ? gap / 2 : 0); x < w; x += gap) {
       els.push(<line key={x + ':' + y} x1={x - (dir.x * L) / 2} y1={y - (dir.y * L) / 2} x2={x + (dir.x * L) / 2} y2={y + (dir.y * L) / 2} className="tidefield" markerEnd="url(#ah-small)" />);
+    }
+  }
+  return <g aria-hidden>{els}</g>;
+}
+
+/**
+ * Wind on the water drawn over the course, on the rows between the tide arrows so the two never overlap.
+ * Each arrow points downwind and carries a short barb at its upwind end so it reads as wind, not stream.
+ */
+function WindField({ w, h, from, kn }: { w: number; h: number; from: number; kn: number }) {
+  if (kn < 0.5) return null;
+  const gap = 120;
+  const L = Math.min(46, 18 + kn * 1.4);
+  const r = from * Math.PI / 180;
+  const dir = { x: -Math.sin(r), y: Math.cos(r) }; // downwind, screen coords
+  const barb = { x: -dir.y * 6 - dir.x * 5, y: dir.x * 6 - dir.y * 5 };
+  const els: React.ReactNode[] = [];
+  for (let y = gap; y < h; y += gap) {
+    for (let x = gap / 2 + ((y / gap) % 2 ? 0 : gap / 2); x < w; x += gap) {
+      const x0 = x - (dir.x * L) / 2, y0 = y - (dir.y * L) / 2;
+      els.push(<g key={x + ':' + y} className="windfield">
+        <line x1={x0} y1={y0} x2={x + (dir.x * L) / 2} y2={y + (dir.y * L) / 2} markerEnd="url(#ah-windfield)" />
+        <line x1={x0} y1={y0} x2={x0 + barb.x} y2={y0 + barb.y} />
+      </g>);
     }
   }
   return <g aria-hidden>{els}</g>;
