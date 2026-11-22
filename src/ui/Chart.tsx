@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTrackAnalysis, TrackModel } from './TrackPanel';
 import { useApp, setState, getState, checkpoint, newId, AppState } from '../store';
 import { useCourse, LAND_PATH, toLonLat, toXY, fmtDeg, fmtTime, CourseModel, tackNarrative } from '../course';
 import { Vec, add, mul, sub, len, mid, fromBearing, bearingOf, norm180, D2R } from '../nav/vec';
@@ -13,6 +14,21 @@ type Drag =
   | { kind: 'pin'; start?: Vec; moved?: boolean }
   | { kind: 'probe' }
   | { kind: 'pinch'; d0: number; c0: Vec; view: AppState['view'] };
+
+function TrackLayer({ m, toS }: { m: TrackModel; toS: (p: Vec) => Vec }) {
+  const pts = (t0: number, t1: number) => m.fixes.filter((f) => f.t >= t0 && f.t <= t1).map((f) => { const q = toS(f.p); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(' ');
+  const start = m.startT !== null ? m.fixes.find((f) => f.t >= m.startT!) : undefined;
+  const s = start && toS(start.p);
+  return (
+    <g className="gps" aria-hidden>
+      {m.a.boards.map((b, i) => {
+        const n = m.a.boards[i + 1];
+        return <polyline key={i} points={pts(b.t0, n ? n.t0 : b.t1)} className={`gps-trk ${b.kind}`} />;
+      })}
+      {s && <><circle cx={s.x} cy={s.y} r={5} className="gps-start" /><text x={s.x + 8} y={s.y - 6} className="lbl">Start</text></>}
+    </g>
+  );
+}
 
 export function Chart() {
   const svgRef = React.useRef<SVGSVGElement>(null);
@@ -29,6 +45,7 @@ export function Chart() {
   const vectorMin = useApp((s) => s.vectorMin);
   const selTack = useApp((s) => s.selectedTack);
   const course = useCourse();
+  const trackModel = useTrackAnalysis();
   const [lineCard, setLineCard] = React.useState(false);
   const [libCard, setLibCard] = React.useState<string | null>(null);
   React.useEffect(() => { if (selTack) setLineCard(false); }, [selTack]);
@@ -300,6 +317,7 @@ export function Chart() {
         <Graticule base={base} w={w} h={h} toS={toS} fromS={fromS} />
         {layers.wind && <WindField w={w} h={h} from={course.wind.water.from} kn={course.wind.water.kn} />}
         {layers.tide && <TideField w={w} h={h} tide={course.wind.tide} />}
+        {layers.track !== false && trackModel && <TrackLayer m={trackModel} toS={toS} />}
         {course.legs.map(legLayer)}
         {layers.startOptions && course.startPlan && (course.startPlan.kind === 'beat' || course.startPlan.kind === 'run') && (
           <g className="start-opt">
